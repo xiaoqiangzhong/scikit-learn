@@ -8,17 +8,17 @@ def d(a, b):
     return np.linalg.norm(a - b)
 
 
-def assign_labels(X, C, center_distances=None):
+def assign_labels(X, centers, center_distances=None):
     # assigns closest center to X
     # uses triangle inequality
     if center_distances is None:
-        center_distances = euclidean_distances(C) / 2.
-    centers, distances = [], []
+        center_distances = euclidean_distances(centers) / 2.
+    new_centers, distances = [], []
     for x in X:
         # assign first cluster center
         c_x = 0
-        d_c = d(x, C[0])
-        for j, c in enumerate(C):
+        d_c = d(x, centers[0])
+        for j, c in enumerate(centers):
             #print("d_c: %f" % d_c)
             #print("d(d_c, c'): %f" % center_distances[c_x, j])
             if d_c > center_distances[c_x, j]:
@@ -26,9 +26,9 @@ def assign_labels(X, C, center_distances=None):
                 if dist < d_c:
                     d_c = dist
                     c_x = j
-        centers.append(c_x)
+        new_centers.append(c_x)
         distances.append(d_c)
-    return np.array(centers), np.array(distances)
+    return np.array(new_centers), np.array(distances)
 
 
 def k_means_elkan(X, n_clusters, init, tol=1e-4, max_iter=30, verbose=False):
@@ -48,32 +48,32 @@ def k_means_elkan(X, n_clusters, init, tol=1e-4, max_iter=30, verbose=False):
         distance_next_center = np.sort(center_distances, axis=0)[1]
         points_to_update = distance_next_center[labels] < upper_bounds
         for point_index in np.where(points_to_update)[0]:
+            upper_bound = upper_bounds[point_index]
+            label = labels[point_index]
             # check other update conditions
             for center_index, center in enumerate(centers):
-                if (center_index != labels[point_index]
-                        and (upper_bounds[point_index] >
+                if (center_index != label
+                        and (upper_bound >
                              lower_bounds[point_index, center_index])
-                        and (upper_bounds[point_index] >
-                             center_distances[center_index,
-                                              labels[point_index]])):
+                        and (upper_bound > center_distances[center_index,
+                                                            label])):
                     # update distance to center
                     if not bounds_tight[point_index]:
-                        upper_bounds[point_index] = \
-                            d(X[point_index], centers[labels[point_index]])
-                        lower_bounds[point_index, labels[point_index]] = \
-                            upper_bounds[point_index]
+                        upper_bound = d(X[point_index], centers[label])
+                        lower_bounds[point_index, label] = upper_bound
                         bounds_tight[point_index] = True
                     # check for relabels
-                    if (upper_bounds[point_index]
+                    if (upper_bound
                             > lower_bounds[point_index, center_index]
-                            or (upper_bounds[point_index] >
-                                center_distances[labels[point_index],
-                                                 center_index])):
+                            or (upper_bound > center_distances[label,
+                                                               center_index])):
                         distance = d(X[point_index], center)
                         lower_bounds[point_index, center_index] = distance
-                        if distance < upper_bounds[point_index]:
-                            labels[point_index] = center_index
-                            upper_bounds[point_index] = distance
+                        if distance < upper_bound:
+                            label = center_index
+                            upper_bound = distance
+            labels[point_index] = label
+            upper_bounds[point_index] = upper_bound
 
         # compute new centers
         new_centers = np.zeros_like(centers)
