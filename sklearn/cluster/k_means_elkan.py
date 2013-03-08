@@ -89,6 +89,8 @@ def k_means_elkan(X, n_clusters, init, tol=1e-4, max_iter=30, verbose=False):
         upper_bounds = upper_bounds + center_shift[labels]
         # reassign centers
         centers = new_centers
+        # update between-center distances
+        center_distances = euclidean_distances(centers) / 2.
         if verbose:
             print('Iteration %i, inertia %s'
                   % (iteration, np.sum((X - centers[labels]) ** 2)))
