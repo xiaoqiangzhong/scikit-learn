@@ -28,8 +28,11 @@ def test_elkan_results():
     X_normal = rnd.normal(size=(50, 10))
     X_blobs, _ = make_blobs(random_state=0)
     for X in [X_normal, X_blobs]:
-        init = _k_init(X, n_clusters=5)
-        loyd_means, loyd_labels, _ = k_means(X, n_clusters=5, init=init)
-        elkan_means, elkan_labels = k_means_elkan(X, n_clusters=5, init=init)
-        assert_array_equal(loyd_labels, elkan_labels)
+        X -= X.mean(axis=0)
+        init = _k_init(X, n_clusters=5, random_state=1)
+        loyd_means, loyd_labels, _ = k_means(X, n_clusters=5, init=init,
+                                             n_init=1, verbose=10)
+        elkan_means, elkan_labels = k_means_elkan(X, n_clusters=5, init=init,
+                                                  verbose=True)
         assert_array_almost_equal(loyd_means, elkan_means)
+        assert_array_equal(loyd_labels, elkan_labels)
