@@ -265,8 +265,8 @@ def fit_grid_point(X, y, base_clf, clf_params, train, test, scorer,
         else:
             this_score = clf.score(X_test)
 
-    if not isinstance(this_score, numbers.Number):
-        raise ValueError("scoring must return a number, got %s (%s)"
+    if not hasattr(this_score, '__float__'):
+        raise ValueError("scoring result must cast to float, got %s (%s)"
                          " instead." % (str(this_score), type(this_score)))
 
     if verbose > 2:
@@ -442,6 +442,7 @@ class BaseSearchCV(BaseEstimator, MetaEstimatorMixin):
             for this_score, clf_params, this_n_test_samples in \
                     out[start:start + n_folds]:
                 these_points.append(this_score)
+                this_score = float(this_score)
                 if self.iid:
                     this_score *= this_n_test_samples
                 mean_validation_score += this_score
