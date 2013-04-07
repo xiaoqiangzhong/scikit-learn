@@ -18,6 +18,7 @@ import time
 import warnings
 
 import numpy as np
+import numpy.ma.mrecords as mrecords
 
 from .base import BaseEstimator, is_classifier, clone
 from .base import MetaEstimatorMixin
@@ -442,7 +443,7 @@ class BaseSearchCV(BaseEstimator, MetaEstimatorMixin):
     def grid_scores_(self):
         warnings.warn("grid_scores_ is deprecated and will be removed in 0.15."
                       " Use grid_results_ and fold_results_ instead.", DeprecationWarning)
-        return zip(self.grid_results_['parameters'],
+        return zip(self._param_array_to_dicts(self.parameters_),
                    self.grid_results_['test_score'],
                    self.fold_results_['test_score'])
 
@@ -456,7 +457,7 @@ class BaseSearchCV(BaseEstimator, MetaEstimatorMixin):
     def best_params_(self):
         if not hasattr(self, 'best_index_'):
             raise AttributeError('Call fit() to calculate best_params_')
-        return self.grid_results_['parameters'][self.best_index_]
+        return self._param_array_to_dicts(self.parameters_)[self.best_index_]
 
     def _check_estimator(self):
         """Check that estimator can be fitted and score can be computed."""
@@ -504,6 +505,34 @@ class BaseSearchCV(BaseEstimator, MetaEstimatorMixin):
                               for point in result_dicts]
                  for key in result_keys)
         return np.rec.fromarrays(arrays, names=result_keys)
+
+    def _params_to_array(self, parameter_iterator):
+        fields = {}
+        for params in parameter_iterator:
+            for name, value in params.iteritems():
+                fields[name] = value  # take an example for masking
+        field_names = sorted(fields.iterkeys())
+
+        data = []
+        mask = []
+        for params in parameter_iterator:
+            row = [(params[name], False) if name in params
+                   else (fields[name], True)
+                   for name in field_names]
+            rdata, rmask = zip(*row)
+            data.append(rdata)
+            mask.append(rmask)
+        return mrecords.fromrecords(data, mask=mask, names=field_names)
+
+    def _param_array_to_dicts(self, parameters):
+        field_names = parameters.dtype.names
+        return [
+            {name: params[name].item()
+                for name in field_names
+                if not params[name].mask
+            }
+            for params in parameters
+        ]
 
     def _fit(self, X, y, parameter_iterator, **params):
         """Actual fitting,  performing the search over parameters."""
@@ -589,6 +618,7 @@ class BaseSearchCV(BaseEstimator, MetaEstimatorMixin):
         self.best_index_ = best_index
         self.fold_results_ = cv_results
         self.grid_results_ = grid_results
+        self.parameters_ = self._params_to_array(parameter_iterator)
 
         if self.refit:
             # fit the best estimator using the entire dataset
