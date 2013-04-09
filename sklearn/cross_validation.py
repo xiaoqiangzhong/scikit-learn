@@ -1304,6 +1304,16 @@ class CVEvaluator(object):
 
         return means, out
 
+    def _call(self, param_iter):
+        # May be overriden
+        out = self.parallel(
+            delayed(fit_fold)(est_params=est_params,
+                train=train, test=test,
+                **self.fit_fold_kwargs)
+            for est_params in param_iter for train, test in self.cv)
+
+        return self._format_results(out)
+
     def __call__(self, parameters=None):
         """
         Cross-validate the estimator, optionally with the given parameters.
@@ -1342,14 +1352,7 @@ class CVEvaluator(object):
             param_iter = parameters
             out_slice = slice(None)
 
-        out = self.parallel(
-            delayed(fit_fold)(est_params=est_params,
-                train=train, test=test,
-                **self.fit_fold_kwargs)
-            for est_params in param_iter for train, test in self.cv)
-
-        means, out = self._format_results(out)
-
+        means, out = self._call(param_iter)
         return means[out_slice], out[out_slice]
 
     def score_folds(self, parameters=None):

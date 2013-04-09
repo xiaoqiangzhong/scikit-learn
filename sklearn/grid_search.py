@@ -21,9 +21,8 @@ from numpy.lib import recfunctions
 from .base import BaseEstimator, clone
 from .base import MetaEstimatorMixin
 from .cross_validation import CVEvaluator, fit_fold
-from .externals.six import string_types, iterkeys
+from .externals.six import string_types, iterkeys, iteritems
 from .utils import check_random_state, deprecated
-from .utils.validation import _num_samples, check_arrays
 from .metrics import SCORERS, Scorer
 
 __all__ = ['GridSearchCV', 'ParameterGrid', 'fit_grid_point',
@@ -379,80 +378,103 @@ class BaseSearchCV(BaseEstimator, MetaEstimatorMixin):
         For example [[{'score': 1}, {'score': 2}], [{'score': 3}, {'score': 4}]]
                  -> {'score': np.array([[1, 2], [3, 4]])}"""
         # assume keys are same throughout
-        result_keys = list(iterkeys(result_dicts[0][0])) 
+        result_keys = list(iterkeys(result_dicts[0][0]))
         arrays = ([[fold_results[key] for fold_results in point]
                               for point in result_dicts]
                  for key in result_keys)
         return np.rec.fromarrays(arrays, names=result_keys)
 
-    def _fit(self, X, y, parameter_iterator, **params):
-        """Actual fitting,  performing the search over parameters."""
-
+    @property
+    def scorer_(self):
         if self.loss_func is not None:
             warnings.warn("Passing a loss function is "
                           "deprecated and will be removed in 0.15. "
                           "Either use strings or score objects."
                           "The relevant new parameter is called ''scoring''. ")
-            scorer = Scorer(self.loss_func, greater_is_better=False)
-        elif self.score_func is not None:
+            return Scorer(self.loss_func, greater_is_better=False)
+
+        if self.score_func is not None:
             warnings.warn("Passing function as ``score_func`` is "
                           "deprecated and will be removed in 0.15. "
                           "Either use strings or score objects."
                           "The relevant new parameter is called ''scoring''.")
-            scorer = Scorer(self.score_func)
-        elif isinstance(self.scoring, string_types):
-            scorer = SCORERS[self.scoring]
-        else:
-            scorer = self.scoring
-        self.scorer_ = scorer
+            return Scorer(self.score_func)
 
-        n_samples = _num_samples(X)
-        X, y = check_arrays(X, y, allow_lists=True, sparse_format='csr')
-        if y is not None:
-            if len(y) != n_samples:
-                raise ValueError('Target variable (y) has a different number '
-                                 'of samples (%i) than data (X: %i samples)'
-                                 % (len(y), n_samples))
-            y = np.asarray(y)
+        if isinstance(self.scoring, string_types):
+            return SCORERS[self.scoring]
 
-        cv_eval = CVEvaluator(self.estimator, X, y, scoring=self.scorer_,
-                cv=self.cv, iid=self.iid, fit_params=self.fit_params,
-                n_jobs=self.n_jobs, pre_dispatch=self.pre_dispatch,
-                verbose=self.verbose)
-        grid_results, cv_results = cv_eval(parameter_iterator)
+        return self.scoring
 
-        # Append 'parameters' to grid_results
-        # Broken due to https://github.com/numpy/numpy/issues/2346:
-        # grid_results = recfunctions.append_fields(grid_results, 'parameters',
-        #        np.asarray(list(parameter_iterator)), usemask=False)
-        new_grid_results = np.zeros(grid_results.shape,
-                dtype=grid_results.dtype.descr + [('parameters', 'O')])
-        for name in grid_results.dtype.names:
-            new_grid_results[name] = grid_results[name]
-        new_grid_results['parameters'] = list(parameter_iterator)
-        grid_results = new_grid_results
-
+    def _find_best(self, scores):
         # Note: we do not use max(out) to make ties deterministic even if
         # comparison on estimator instances is not deterministic
-        if scorer is not None:
-            greater_is_better = scorer.greater_is_better
-        else:
-            greater_is_better = True
-
+        greater_is_better = getattr(self.scorer_, 'greater_is_better', True)
         if greater_is_better:
             best_score = -np.inf
         else:
             best_score = np.inf
 
-        for i, score in enumerate(grid_results['test_score']):
+        for i, score in enumerate(scores):
             if ((score > best_score and greater_is_better)
                     or (score < best_score
                         and not greater_is_better)):
                 best_score = score
                 best_index = i
+        return best_score, best_index
 
-        self.best_index_ = best_index
-        self.fold_results_ = cv_results
+    class StoringCVEvaluator(CVEvaluator):
+        """
+        A CVEvaluator that stores the input and output to successive calls
+        """
+        def __init__(self, *args, **kwargs):
+            super(BaseSearchCV.StoringCVEvaluator, self).__init__(*args,
+                    **kwargs)
+            self.param_history = []
+            self.result_history = None
+
+        def _call(self, param_iter):
+            param_seq = list(param_iter)
+            self.param_history.extend(param_seq)
+
+            out = super(BaseSearchCV.StoringCVEvaluator, self)._call(param_seq)
+
+            if self.result_history is None:
+                self.result_history = out
+            else:
+                self.result_history = tuple(recfunctions.stack_arrays((old, new),
+                        autoconvert=True, usemask=False)
+                    for old, new in zip(self.result_history, out))
+            return out
+
+    def _fit(self, X, y, search, **params):
+        """Actual fitting, performing the search over parameters."""
+        cv_eval = self.StoringCVEvaluator(self.estimator, X, y,
+                scoring=self.scorer_, cv=self.cv, iid=self.iid,
+                fit_params=self.fit_params, n_jobs=self.n_jobs,
+                pre_dispatch=self.pre_dispatch, verbose=self.verbose)
+
+        best_params = search(cv_eval)
+        grid_results, fold_results = cv_eval.result_history
+
+        if best_params is None:
+            best_score, self.best_index_ = self._find_best(grid_results['test_score'])
+        elif type(best_params) == int:
+            self.best_index_ = best_params
+        else:
+            self.best_index_ = cv_eval.param_history.index(best_params)
+
+        # Append 'parameters' to grid_results
+        # Broken due to https://github.com/numpy/numpy/issues/2346:
+        # grid_results = recfunctions.append_fields(grid_results, 'parameters',
+        #        np.asarray(cv_eval.param_history), usemask=False)
+        new_grid_results = np.zeros(grid_results.shape,
+                dtype=grid_results.dtype.descr + [('parameters', 'O')])
+        for name in grid_results.dtype.names:
+            new_grid_results[name] = grid_results[name]
+        new_grid_results['parameters'] = cv_eval.param_history
+        grid_results = new_grid_results
+
+        self.fold_results_ = fold_results
         self.grid_results_ = grid_results
 
         if self.refit:
@@ -468,7 +490,20 @@ class BaseSearchCV(BaseEstimator, MetaEstimatorMixin):
         return self
 
 
-class GridSearchCV(BaseSearchCV):
+class BaseSequenceSearchCV(BaseSearchCV):
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def __init__(self, *args, **kwargs):
+        super(BaseSequenceSearchCV, self).__init__(*args, **kwargs)
+
+    def _fit(self, X, y, param_sequence, **kwargs):
+        def search(cv_eval):
+            cv_eval(param_sequence)
+        return super(BaseSequenceSearchCV, self)._fit(X, y, search, **kwargs)
+
+
+class GridSearchCV(BaseSequenceSearchCV):
     """Exhaustive search over specified parameter values for an estimator.
 
     Important members are fit, predict.
@@ -639,7 +674,7 @@ class GridSearchCV(BaseSearchCV):
         return self._fit(X, y, ParameterGrid(self.param_grid), **params)
 
 
-class RandomizedSearchCV(BaseSearchCV):
+class RandomizedSearchCV(BaseSequenceSearchCV):
     """Randomized search on hyper parameters.
 
     RandomizedSearchCV implements a "fit" method and a "predict" method like
@@ -803,3 +838,106 @@ class RandomizedSearchCV(BaseSearchCV):
         sampled_params = ParameterSampler(self.param_distributions,
                                           self.n_iter)
         return self._fit(X, y, sampled_params, **params)
+
+
+class BaseScipyMinimizeCV(BaseSearchCV):
+    __meta__ = ABCMeta
+
+    @abstractmethod
+    def __init__(self, estimator, param_transforms, scoring=None,
+            loss_func=None, score_func=None, fit_params=None, n_jobs=1,
+            iid=True, refit=True, cv=None, verbose=0, pre_dispatch='2*n_jobs'):
+        super(BaseScipyMinimizeCV, self).__init__(estimator, scoring=None,
+                 loss_func=None, score_func=None, fit_params=None, n_jobs=1,
+                 iid=True, refit=True, cv=None, verbose=0, pre_dispatch='2*n_jobs')
+        self.param_transforms = param_transforms
+
+    def _get_param_tranforms(self):
+        return dict(zip(self._param_names, self._param_transforms))
+
+    def _set_param_transforms(self, transforms):
+        names, transforms = zip(*sorted(iteritems(transforms)))
+        self._param_names = names
+        self._param_transforms = transforms
+
+    param_transforms = property(_get_param_tranforms, _set_param_transforms)
+
+    @property
+    def param_names(self):
+        return self._param_names
+
+    def _param_dict_to_list(self, d):
+        "Helper to transform dict-based arguments to lists for scipy"
+        if d is None:
+            return None
+        return [d[name] for name in self._param_names]
+
+    def _fit(self, X, y, cleaned_minimize, *kwargs):
+        greater_is_better = getattr(self.scorer_, 'greater_is_better', True)
+        if greater_is_better:
+            score_mult = -1
+        else:
+            score_mult = 1
+
+        transform = partial(np.vectorize(lambda f, x: f(x)),
+                self._param_transforms)
+        def values_to_dict(vals):
+            return dict(zip(self._param_names, transform(vals)))
+        x0 = np.zeros(len(self._param_names),)
+
+        def search(cv_eval):
+            def objective(param_values):
+                params = values_to_dict(param_values)
+                mean = cv_eval.score_means(params)
+                return mean * score_mult
+
+            best_param_values = cleaned_minimize(objective, x0=x0)
+            return values_to_dict(best_param_values)
+
+        return super(BaseScipyMinimizeCV, self)._fit(X, y, search)
+
+
+class ScipyMinimizeCV(BaseScipyMinimizeCV):
+    """
+    >>> from sklearn import svm, grid_search, datasets
+    >>> iris = datasets.load_iris()
+    >>> svr = svm.SVC()
+    >>> clf = grid_search.ScipyMinimizeCV(svr, {'C': lambda x: 10 ** (x / 0.0001) + 1e-25})
+    >>> clf = clf.fit(iris.data, iris.target)
+    >>>
+    >>> (clf.grid_results_, clf.best_index_, clf.best_params_, clf.best_score_)
+    something incorrect
+    """
+
+    def __init__(self, estimator, param_transforms, method='Nelder-Mead',
+            bounds=None, constraints=(), tol=None, options=None, scoring=None,
+            loss_func=None, score_func=None, fit_params=None, n_jobs=1,
+            iid=True, refit=True, cv=None, verbose=0, pre_dispatch='2*n_jobs'):
+
+        super(ScipyMinimizeCV, self).__init__(estimator, param_transforms,
+                scoring=None, loss_func=None, score_func=None, fit_params=None,
+                n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
+                pre_dispatch='2*n_jobs')
+
+        self.method = method
+        self.bounds = bounds
+        self.constraints = constraints
+        self.tol = tol
+        self.options = options
+
+    def fit(self, X, y=None, **kwargs):
+        from scipy.optimize import minimize
+
+        partial_minimize = partial(minimize, method=self.method,
+                bounds=self._param_dict_to_list(self.bounds),
+                constraints=self.constraints, tol=self.tol,
+                options=self.options)
+
+        def cleaned_minimize(*args, **kwargs):
+            res = partial_minimize(*args, **kwargs)
+            self.scipy_results_ = res
+            return res.x
+
+        return super(ScipyMinimizeCV, self)._fit(X, y,
+                cleaned_minimize, **kwargs)
+
