@@ -941,3 +941,51 @@ class ScipyMinimizeCV(BaseScipyMinimizeCV):
         return super(ScipyMinimizeCV, self)._fit(X, y,
                 cleaned_minimize, **kwargs)
 
+
+class HyperoptCV(BaseSearchCV):
+    """
+    >>> from sklearn import svm, grid_search, datasets
+    >>> iris = datasets.load_iris()
+    >>> svr = svm.SVC()
+    >>> import hyperopt
+    >>> clf = grid_search.HyperoptCV(svr, {'C': hyperopt.hp.lognormal('C', 0, 5)}, hyperopt.tpe.suggest)
+    >>> clf = clf.fit(iris.data, iris.target)
+    >>> 
+    >>> (clf.grid_results_, clf.best_index_, clf.best_params_, clf.best_score_)
+    something incorrect
+    """
+
+    def __init__(self, estimator, space, algo, max_evals=100, rseed=123,
+            scoring=None, loss_func=None, score_func=None, fit_params=None,
+            n_jobs=1, iid=True, refit=True, cv=None, verbose=0,
+            pre_dispatch='2*n_jobs'):
+
+        super(HyperoptCV, self).__init__(estimator, scoring=None,
+                loss_func=None, score_func=None, fit_params=None, n_jobs=1,
+                iid=True, refit=True, cv=None, verbose=0,
+                pre_dispatch='2*n_jobs')
+        self.space = space
+        self.algo = algo
+        self.max_evals = max_evals
+        self.rseed = rseed
+
+    def fit(self, X, y=None, **kwargs):
+        from hyperopt import fmin
+
+        greater_is_better = getattr(self.scorer_, 'greater_is_better', True)
+        if greater_is_better:
+            score_mult = -1
+        else:
+            score_mult = 1
+
+        partial_fmin = partial(fmin, space=self.space, algo=self.algo,
+                max_evals=self.max_evals, rseed=self.rseed)
+
+        def search(cv_eval):
+            def objective(params):
+                return cv_eval.score_means(params) * score_mult
+            partial_fmin(objective)
+            return None
+
+        return super(HyperoptCV, self)._fit(X, y, search, **kwargs)
+ 
