@@ -944,16 +944,137 @@ class ScipyMinimizeCV(BaseScipyMinimizeCV):
 
 class HyperoptCV(BaseSearchCV):
     """
+    Cross-validated model selection using hyperopt [1] to sample parameters.
+
+    estimator : object that implements the "fit" and "predict" methods
+        This is cloned to score each fold for each parameter setting.
+
+    space : a hyperopt space
+        The space that parameters are sampled from; this should produce a dict
+        or an iterable of dicts where keys correspond to parameter names for
+        `estimator`. (If an iterable of dicts is returned, the keys in later
+        dicts take precedence over earlier.)
+
+    algo : a hyperopt search algorithm
+        This algorithm is used to sample from the hyperopt space, possibly
+        given scores for previously-sampled parameters. Examples include
+        `hyperopt.random.suggest` and `hyperopt.tpe.suggest`.
+
+    max_evals : integer
+        The maximum number of parameter settings to sample (default: 100).
+
+    rseed : integer
+        The random seed to use in sampling.
+
+    scoring : string or callable, optional
+        Either one of either a string ("zero_one", "f1", "roc_auc", ... for
+        classification, "mse", "r2",... for regression) or a callable.
+        See 'Scoring objects' in the model evaluation section of the user guide
+        for details.
+
+    fit_params : dict, optional
+        Parameters to pass to the fit method.
+
+    n_jobs : int, optional
+        Number of jobs to run in parallel (default 1).
+
+    pre_dispatch : int, or string, optional
+        Controls the number of jobs that get dispatched during parallel
+        execution. Reducing this number can be useful to avoid an
+        explosion of memory consumption when more jobs get dispatched
+        than CPUs can process. This parameter can be:
+
+            - None, in which case all the jobs are immediatly
+              created and spawned. Use this for lightweight and
+              fast-running jobs, to avoid delays due to on-demand
+              spawning of the jobs
+
+            - An int, giving the exact number of total jobs that are
+              spawned
+
+            - A string, giving an expression as a function of n_jobs,
+              as in '2*n_jobs'
+
+    iid : boolean, optional
+        If True (default), the data is assumed to be identically distributed
+        across the folds, and the mean score is the total score per sample,
+        and not the mean score across the folds.
+
+    cv : integer or cross-validation generator, optional
+        If an integer is passed, it is the number of folds (default 3).
+        Specific cross-validation objects can be passed, see
+        sklearn.cross_validation module for the list of possible objects
+
+    refit : boolean
+        Refit the best estimator with the entire dataset.
+        If "False", it is impossible to make predictions using
+        this GridSearchCV instance after fitting.
+
+    verbose : integer
+        Controls the verbosity: the higher, the more messages.
+
+    Example
+    -------
     >>> from sklearn import svm, grid_search, datasets
     >>> iris = datasets.load_iris()
     >>> svr = svm.SVC()
-    >>> import hyperopt
-    >>> clf = grid_search.HyperoptCV(svr, {'C': hyperopt.hp.lognormal('C', 0, 5)}, hyperopt.tpe.suggest)
+    >>> from hyperopt import hp, tpe
+    >>> space = [
+    ...     {
+    ...         'C': hp.lognormal('C', 0, 5),
+    ...     },
+    ...     hp.choice('kernel', [
+    ...         {'kernel': 'rbf'},
+    ...         {'kernel': 'poly', 'degree': 1 + hp.randint('deg', 5)}
+    ...     ])
+    ... ]
+    >>> clf = grid_search.HyperoptCV(svr, space, tpe.suggest, max_evals=10, rseed=123)
     >>> clf = clf.fit(iris.data, iris.target)
-    >>> 
-    >>> (clf.grid_results_, clf.best_index_, clf.best_params_, clf.best_score_)
-    something incorrect
+    >>> clf.best_params_  # doctest: +ELLIPSIS
+    {...}
+
+    References
+    ----------
+    .. [1] https://pypi.python.org/pypi/hyperopt
+
+    Attributes
+    ----------
+    `grid_results_` : structured array of shape [# param combinations]
+        For each parameter combination in ``param_grid`` includes these fields:
+
+            * ``parameters``, dict of parameter settings
+            * ``test_score``, the mean score over the
+              cross-validation folds
+
+    `fold_results_` : structured array of shape [# param combinations, # folds]
+        For each cross-validation fold includes these fields:
+
+            * ``test_score``, the score for this fold
+            * ``test_n_samples``, the number of samples in testing
+
+    `best_estimator_` : estimator
+        Estimator that was choosen by the search, i.e. estimator
+        which gave highest score (or smallest loss if specified)
+        on the left out data. Available only if refit=True.
+
+    `best_index_` : int
+        The index of the best parameter setting into ``grid_results_`` and
+        ``fold_results_`` data.
+
+    `best_score_` : float
+        Score of best_estimator on the left out data.
+
+    `best_params_` : dict
+        Parameter setting that gave the best results on the hold out data.
+
+    `grid_scores_` : list of tuples (deprecated)
+        Contains scores for all parameter combinations in ``param_grid``:
+        each tuple is (parameters, mean score, fold scores).
+
     """
+
+    # TODO: handle Trials for continuation and async, and perhaps to rely on
+    #       hyperopt to track results.
 
     def __init__(self, estimator, space, algo, max_evals=100, rseed=123,
             scoring=None, loss_func=None, score_func=None, fit_params=None,
@@ -970,6 +1091,20 @@ class HyperoptCV(BaseSearchCV):
         self.rseed = rseed
 
     def fit(self, X, y=None, **kwargs):
+        """Run `algo` to find the best parameters.
+
+        Parameters
+        ----------
+
+        X: array-like, shape = [n_samples, n_features]
+            Training vector, where n_samples in the number of samples and
+            n_features is the number of features.
+
+        y: array-like, shape = [n_samples], optional
+            Target vector relative to X for classification;
+            None for unsupervised learning.
+
+        """
         from hyperopt import fmin
 
         greater_is_better = getattr(self.scorer_, 'greater_is_better', True)
