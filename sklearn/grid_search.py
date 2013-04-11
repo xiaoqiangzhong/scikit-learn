@@ -983,6 +983,16 @@ class HyperoptCV(BaseSearchCV):
 
         def search(cv_eval):
             def objective(params):
+                if not hasattr(params, 'items'):
+                    # merge an iterable of dicts
+                    it = iter(params)
+                    try:
+                        params = it.next()
+                    except StopIteration:
+                        params = {}
+                    for d in it:
+                        params.update(d)
+
                 return cv_eval.score_means(params) * score_mult
             partial_fmin(objective)
             return None
