@@ -9,7 +9,7 @@ from __future__ import print_function
 # License: BSD Style.
 
 from abc import ABCMeta, abstractmethod
-from collections import Mapping, namedtuple
+from collections import Mapping, defaultdict, namedtuple
 from functools import partial, reduce
 from itertools import product
 import numbers
@@ -18,6 +18,7 @@ import time
 import warnings
 
 import numpy as np
+from numpy.ma import mrecords
 
 from .base import BaseEstimator, is_classifier, clone
 from .base import MetaEstimatorMixin
@@ -515,6 +516,99 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator, MetaEstimatorMixin
             for clf_params, (score, _), all_scores
             in zip(parameter_iterator, scores, cv_scores)]
         return self
+
+    def _params_to_arrays(self, parameter_seq):
+        npoints = len(parameter_seq)
+        data = {}
+        masks = defaultdict(lambda: np.repeat(True, npoints))
+        for i, params in enumerate(parameter_seq):
+            for name, value in params.iteritems():
+                try:
+                    data[name][i] = value
+                except KeyError:
+                    data[name] = [value] * npoints
+                masks[name][i] = False
+
+        for name, values in data.iteritems():
+            if not np.any(masks[name]):
+                yield name, np.array(values)
+            else:
+                yield name, np.ma.masked_array(values, mask=masks[name])
+
+    def tabulate_results(self, per_fold=True, param_fmt=':{}', fold_field='#'):
+        """Transform parameters and search results into a record array.
+
+        The purpose of this function is to provide results in a format that
+        can be readily transformed or queried. In particular, it may be
+        imported into a `pandas.DataFrame` and, through pandas or otherwise,
+        exported to spreadsheet or database software.
+
+        Parameters
+        ----------
+        `per_fold` : boolean, default `True`
+            If `True`, a record is returned for each cross-validation fold,
+            with the score for that fold. If `False`, one record is returned
+            per set of parameters with mean scores across folds.
+        `param_fmt` : string, default ':{}'
+            A format string that produces the field name for a parameter `p`
+            using `param_fmt.format(name)`. By default, parameter fields
+            prefix the parameter name with ':'.
+        `fold_field` : string, default '#'
+            The field name used for the fold number if `per_fold` is `True`.
+
+        Returns
+        -------
+        `table` : [masked] 1D record array
+            Either one (`per_fold=False`) or number-of-folds (`per_fold=True`)
+            records is returned for each set of parameters. Each record
+            includes the values of parameters set (masked if not set there,
+            but set elsewhere in the search), the fold number if `per_fold` is
+            `True`, and the `'test_score'` result field.
+
+        For example:
+        >>> from sklearn import svm, grid_search, datasets
+        >>> iris = datasets.load_iris()
+        >>> parameters = [
+        ...     {'kernel':['poly'], 'degree': [2,3]},
+        ...     {'kernel': ['rbf']}
+        ... ]
+        >>> svr = svm.SVC()
+        >>> clf = grid_search.GridSearchCV(svr, parameters, cv=3)
+        >>> clf = clf.fit(iris.data, iris.target)
+        >>> means_table = clf.tabulate_results(per_fold=False)
+        >>> means_table.shape
+        (3,)
+        >>> sorted(means_table.dtype.names)
+        [':degree', ':kernel', 'test_score']
+        >>> print(means_table[[':kernel', ':degree']])
+        [(poly,2), (poly,3), (rbf,--)]
+        >>> folds_table = clf.tabulate_results(per_fold=True)
+        >>> folds_table.shape
+        (9,)
+        >>> print(folds_table[:4][[':kernel', ':degree', '#']])
+        [(poly,2,0), (poly,2,1), (poly,2,2), (poly,3,0)]
+        >>> sorted(folds_table.dtype.names)
+        ['#', ':degree', ':kernel', 'test_score']
+        """
+        parameters = [tup.parameters for tup in self.cv_scores_]
+        npoints = len(parameters)
+        nfolds = len(self.cv_scores_[0][-1]) if per_fold else 1
+        arrays = []
+        names = []
+        for param_name, param_values in self._params_to_arrays(parameters):
+            names.append(param_fmt.format(param_name))
+            arrays.append(param_values.repeat(nfolds))
+
+        if per_fold:
+            names.append(fold_field)
+            arrays.append(np.arange(nfolds).reshape(1, nfolds).repeat(npoints, axis=0).ravel())
+            names.append('test_score')
+            arrays.append(np.concatenate([tup.cv_validation_scores for tup in self.cv_scores_]))
+        else:
+            names.append('test_score')
+            arrays.append([tup.mean_validation_score for tup in self.cv_scores_])
+
+        return mrecords.fromarrays(arrays, names=names)
 
 
 class GridSearchCV(BaseSearchCV):
