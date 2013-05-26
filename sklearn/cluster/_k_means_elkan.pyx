@@ -1,3 +1,11 @@
+# cython: cdivision=True
+# cython: boundscheck=False
+# cython: wraparound=False
+#
+# Author: Andreas Mueller
+#
+# Licence: BSD 3 clause
+
 import numpy as np
 cimport numpy as np
 cimport cython
@@ -9,20 +17,16 @@ from .k_means_ import _tolerance
 from ._k_means import _centers_dense
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.cdivision(True)
 cdef double d(double[:] a, double[:] b) nogil:
-    cdef double result = 0
+    cdef double result, tmp
+    result = 0
     cdef int i
     for i in range(a.shape[0]):
-        result += (a[i] - b[i]) ** 2
+        tmp = (a[i] - b[i])
+        result += tmp * tmp
     return sqrt(result)
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.cdivision(True)
 cdef assign_labels(double[:, :] X, double[:, :] centers, double[:, :]
                    center_distances, int[:] labels, double[:] distances):
     print("start assign labels")
@@ -39,8 +43,8 @@ cdef assign_labels(double[:, :] X, double[:, :] centers, double[:, :]
         x = X[sample]
         d_c = d(x, centers[0])
         for j in range(n_centers):
-            c = centers[j]
             if d_c > center_distances[c_x, j]:
+                c = centers[j]
                 dist = d(x, c)
                 if dist < d_c:
                     d_c = dist
@@ -50,18 +54,17 @@ cdef assign_labels(double[:, :] X, double[:, :] centers, double[:, :]
     print("end assign labels")
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.cdivision(True)
-def k_means_elkan(X, n_clusters, init, float tol=1e-4, int max_iter=30, verbose=False):
+def k_means_elkan(X_, n_clusters, init, float tol=1e-4, int max_iter=30, verbose=False):
     #initialize
-    tol = _tolerance(X, tol)
-    centers = init
+    tol = _tolerance(X_, tol)
+    centers_ = init
+    cdef double[:, :] centers = centers_
+    cdef double[:, :] X = X_
     cdef int n_samples = X.shape[0]
     cdef int n_centers = centers.shape[0]
     cdef int point_index, center_index, label
     cdef float upper_bound, distance
-    cdef double[:, :] center_distances = euclidean_distances(centers) / 2.
+    cdef double[:, :] center_distances = euclidean_distances(centers_) / 2.
     cdef double[:, :] lower_bounds = np.zeros((n_samples, n_centers))
     cdef double[:] x, distance_next_center
     labels_ = np.empty(n_samples, dtype=np.int32)
@@ -108,23 +111,24 @@ def k_means_elkan(X, n_clusters, init, float tol=1e-4, int max_iter=30, verbose=
             upper_bounds[point_index] = upper_bound
         print("end inner loop")
         # compute new centers
-        new_centers = _centers_dense(X, labels_, n_centers, upper_bounds_)
+        new_centers = _centers_dense(X_, labels_, n_centers, upper_bounds_)
         bounds_tight = np.zeros(n_samples, dtype=np.uint8)
 
         # compute distance each center moved
-        center_shift = np.sqrt(np.sum((centers - new_centers) ** 2, axis=1))
+        center_shift = np.sqrt(np.sum((centers_ - new_centers) ** 2, axis=1))
         # update bounds accordingly
         lower_bounds = np.maximum(lower_bounds - center_shift, 0)
         upper_bounds = upper_bounds + center_shift[labels_]
         # reassign centers
         centers = new_centers
+        centers_ = new_centers
         # update between-center distances
-        center_distances = euclidean_distances(centers) / 2.
+        center_distances = euclidean_distances(centers_) / 2.
         if verbose:
             print('Iteration %i, inertia %s'
-                  % (iteration, np.sum((X - centers[labels]) ** 2)))
+                  % (iteration, np.sum((X - centers_[labels]) ** 2)))
 
         if np.sum(center_shift) < tol:
             print("center shift within tolerance")
             break
-    return centers, labels
+    return centers_, labels
