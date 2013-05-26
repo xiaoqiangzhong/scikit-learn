@@ -76,12 +76,15 @@ def k_means_elkan(X, n_clusters, init, float tol=1e-4, int max_iter=30, verbose=
     cdef np.uint8_t[:] points_to_update = np.zeros(n_samples, dtype=np.uint8)
     for iteration in range(max_iter):
         print("start iteration")
+        # we could find the closest center in O(n) but
+        # this does not seem to be the bottleneck
         distance_next_center = np.sort(center_distances, axis=0)[1]
+        print("done sorting")
         for point_index in range(n_samples):
-            if distance_next_center[labels[point_index]] >= upper_bounds[point_index]:
-                continue
             upper_bound = upper_bounds[point_index]
             label = labels[point_index]
+            if distance_next_center[label] >= upper_bound:
+                continue
             x = X[point_index]
             # check other update conditions
             for center_index in range(n_centers):
