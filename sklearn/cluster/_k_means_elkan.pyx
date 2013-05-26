@@ -1,27 +1,38 @@
 import numpy as np
+cimport numpy as np
+cimport cython
 
 from ..metrics import euclidean_distances
 from .k_means_ import _tolerance
 from ._k_means import _centers_dense
 
 
-def d(a, b):
-    return np.sqrt(np.sum((a - b) ** 2))
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef d(double[:] a, double[:] b):
+    cdef double result = 0
+    cdef int i
+    for i in range(len(a)):
+        result += (a[i] - b[i]) ** 2
+    return np.sqrt(result)
 
 
-def assign_labels(X, centers, center_distances=None):
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef assign_labels(double[:, :] X, double[:, :] centers, double[:, :]
+                   center_distances):
     # assigns closest center to X
     # uses triangle inequality
-    if center_distances is None:
-        center_distances = euclidean_distances(centers) / 2.
     new_centers, distances = [], []
+    cdef double d_c, dist
+    cdef int c_x
     for x in X:
         # assign first cluster center
         c_x = 0
         d_c = d(x, centers[0])
         for j, c in enumerate(centers):
-            #print("d_c: %f" % d_c)
-            #print("d(d_c, c'): %f" % center_distances[c_x, j])
             if d_c > center_distances[c_x, j]:
                 dist = d(x, c)
                 if dist < d_c:
@@ -43,10 +54,11 @@ def k_means_elkan(X, n_clusters, init, float tol=1e-4, int max_iter=30, verbose=
     cdef double[:, :] center_distances = euclidean_distances(centers) / 2.
     cdef double[:, :] lower_bounds = np.zeros((n_samples, n_centers))
     labels, upper_bounds = assign_labels(
-        X, centers, center_distances=center_distances)
+        X, centers, center_distances)
     # make bounds tight for current labelss
-    lower_bounds[np.arange(n_samples), labels] = upper_bounds
-    [:] bounds_tight = np.ones(n_samples, dtype=np.bool)
+    for point_index in range(n_samples):
+        lower_bounds[point_index, labels[point_index]] = upper_bounds[point_index]
+    bounds_tight = np.ones(n_samples, dtype=np.bool)
     for iteration in range(max_iter):
         distance_next_center = np.sort(center_distances, axis=0)[1]
         points_to_update = distance_next_center[labels] < upper_bounds
