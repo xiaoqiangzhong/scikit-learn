@@ -2,10 +2,11 @@ import numpy as np
 
 from ..metrics import euclidean_distances
 from .k_means_ import _tolerance
+from ._k_means import _centers_dense
 
 
 def d(a, b):
-    return np.linalg.norm(a - b)
+    return np.sqrt(np.sum((a - b) ** 2))
 
 
 def assign_labels(X, centers, center_distances=None):
@@ -28,23 +29,25 @@ def assign_labels(X, centers, center_distances=None):
                     c_x = j
         new_centers.append(c_x)
         distances.append(d_c)
-    return np.array(new_centers), np.array(distances)
+    return np.array(new_centers, dtype=np.int32), np.array(distances)
 
 
-def k_means_elkan(X, n_clusters, init, tol=1e-4, max_iter=30, verbose=False):
+def k_means_elkan(X, n_clusters, init, float tol=1e-4, int max_iter=30, verbose=False):
     #initialize
     tol = _tolerance(X, tol)
     centers = init
-    n_samples = X.shape[0]
-    n_centers = centers.shape[0]
-    center_distances = euclidean_distances(centers) / 2.
-    lower_bounds = np.zeros((n_samples, n_centers))
+    cdef int n_samples = X.shape[0]
+    cdef int n_centers = centers.shape[0]
+    cdef int point_index, center_index, label
+    cdef float upper_bound, distance
+    cdef double[:, :] center_distances = euclidean_distances(centers) / 2.
+    cdef double[:, :] lower_bounds = np.zeros((n_samples, n_centers))
     labels, upper_bounds = assign_labels(
         X, centers, center_distances=center_distances)
     # make bounds tight for current labelss
     lower_bounds[np.arange(n_samples), labels] = upper_bounds
-    bounds_tight = np.ones(n_samples, dtype=np.bool)
-    for iteration in xrange(max_iter):
+    [:] bounds_tight = np.ones(n_samples, dtype=np.bool)
+    for iteration in range(max_iter):
         distance_next_center = np.sort(center_distances, axis=0)[1]
         points_to_update = distance_next_center[labels] < upper_bounds
         for point_index in np.where(points_to_update)[0]:
@@ -53,20 +56,16 @@ def k_means_elkan(X, n_clusters, init, tol=1e-4, max_iter=30, verbose=False):
             # check other update conditions
             for center_index, center in enumerate(centers):
                 if (center_index != label
-                        and (upper_bound >
-                             lower_bounds[point_index, center_index])
-                        and (upper_bound > center_distances[center_index,
-                                                            label])):
+                        and (upper_bound > lower_bounds[point_index, center_index])
+                        and (upper_bound > center_distances[center_index, label])):
                     # update distance to center
                     if not bounds_tight[point_index]:
                         upper_bound = d(X[point_index], centers[label])
                         lower_bounds[point_index, label] = upper_bound
                         bounds_tight[point_index] = True
                     # check for relabels
-                    if (upper_bound
-                            > lower_bounds[point_index, center_index]
-                            or (upper_bound > center_distances[label,
-                                                               center_index])):
+                    if (upper_bound > lower_bounds[point_index, center_index]
+                            or (upper_bound > center_distances[label, center_index])):
                         distance = d(X[point_index], center)
                         lower_bounds[point_index, center_index] = distance
                         if distance < upper_bound:
@@ -76,10 +75,7 @@ def k_means_elkan(X, n_clusters, init, tol=1e-4, max_iter=30, verbose=False):
             upper_bounds[point_index] = upper_bound
 
         # compute new centers
-        new_centers = np.zeros_like(centers)
-        for center_index in xrange(n_centers):
-            new_centers[center_index] = np.mean(X[labels == center_index],
-                                                axis=0)
+        new_centers = _centers_dense(X, labels, n_centers, upper_bounds)
         bounds_tight = np.zeros(n_samples, dtype=np.bool)
 
         # compute distance each center moved

@@ -23,6 +23,10 @@ def configuration(parent_package='', top_path=None):
                          sources=['_hierarchical.c'],
                          include_dirs=[numpy.get_include()],
                          libraries=libraries)
+    config.add_extension('_k_means_elkan',
+                         sources=['_k_means_elkan.c'],
+                         include_dirs=[numpy.get_include()],
+                         libraries=libraries)
 
     config.add_extension(
         '_k_means',
