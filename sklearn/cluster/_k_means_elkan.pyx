@@ -34,7 +34,7 @@ cdef double d(double* a, double* b, int n_features) nogil:
 
 
 cdef assign_labels(double* X, double* centers, double[:, :]
-                   center_distances, int[:] labels, double[:] distances, int n_samples, int n_features, int n_centers):
+                   center_distances, int[:] labels, double[:] distances, int n_samples, int n_features, int n_clusters):
     print("start assign labels")
     # assigns closest center to X
     # uses triangle inequality
@@ -47,7 +47,7 @@ cdef assign_labels(double* X, double* centers, double[:, :]
         c_x = 0
         x = X + sample * n_features
         d_c = d(x, centers, n_features)
-        for j in range(n_centers):
+        for j in range(n_clusters):
             if d_c > center_distances[c_x, j]:
                 c = centers + j * n_features
                 dist = d(x, c, n_features)
@@ -59,28 +59,25 @@ cdef assign_labels(double* X, double* centers, double[:, :]
     print("end assign labels")
 
 
-def k_means_elkan(X_, n_clusters, init, float tol=1e-4, int max_iter=30, verbose=False):
+def k_means_elkan(X_, int n_clusters, init, float tol=1e-4, int max_iter=30, verbose=False):
     #initialize
     tol = _tolerance(X_, tol)
     centers_ = init
-    cdef double[:, :] centers = centers_
-    cdef double[:, :] X = X_
     cdef double* centers_p = getfloatpointer(centers_)
     cdef double* X_p = getfloatpointer(X_)
     cdef double* x_p
-    cdef int n_samples = X.shape[0]
-    cdef int n_features = X.shape[1]
-    cdef int n_centers = centers.shape[0]
+    cdef int n_samples = X_.shape[0]
+    cdef int n_features = X_.shape[1]
     cdef int point_index, center_index, label
     cdef float upper_bound, distance
     cdef double[:, :] center_distances = euclidean_distances(centers_) / 2.
-    cdef double[:, :] lower_bounds = np.zeros((n_samples, n_centers))
-    cdef double[:] x, distance_next_center
+    cdef double[:, :] lower_bounds = np.zeros((n_samples, n_clusters))
+    cdef double[:] distance_next_center
     labels_ = np.empty(n_samples, dtype=np.int32)
     cdef int[:] labels = labels_
     upper_bounds_ = np.empty(n_samples, dtype=np.float)
     cdef double[:] upper_bounds = upper_bounds_
-    assign_labels(X_p, centers_p, center_distances, labels, upper_bounds, n_samples, n_features, n_centers)
+    assign_labels(X_p, centers_p, center_distances, labels, upper_bounds, n_samples, n_features, n_clusters)
     # make bounds tight for current labelss
     for point_index in range(n_samples):
         lower_bounds[point_index, labels[point_index]] = upper_bounds[point_index]
@@ -99,7 +96,7 @@ def k_means_elkan(X_, n_clusters, init, float tol=1e-4, int max_iter=30, verbose
                 continue
             x_p = X_p + point_index * n_features
             # check other update conditions
-            for center_index in range(n_centers):
+            for center_index in range(n_clusters):
                 if (center_index != label
                         and (upper_bound > lower_bounds[point_index, center_index])
                         and (upper_bound > center_distances[center_index, label])):
@@ -120,7 +117,7 @@ def k_means_elkan(X_, n_clusters, init, float tol=1e-4, int max_iter=30, verbose
             upper_bounds[point_index] = upper_bound
         print("end inner loop")
         # compute new centers
-        new_centers = _centers_dense(X_, labels_, n_centers, upper_bounds_)
+        new_centers = _centers_dense(X_, labels_, n_clusters, upper_bounds_)
         bounds_tight = np.zeros(n_samples, dtype=np.uint8)
 
         # compute distance each center moved
@@ -129,14 +126,13 @@ def k_means_elkan(X_, n_clusters, init, float tol=1e-4, int max_iter=30, verbose
         lower_bounds = np.maximum(lower_bounds - center_shift, 0)
         upper_bounds = upper_bounds + center_shift[labels_]
         # reassign centers
-        centers = new_centers
         centers_ = new_centers
         centers_p = getfloatpointer(new_centers)
         # update between-center distances
         center_distances = euclidean_distances(centers_) / 2.
         if verbose:
             print('Iteration %i, inertia %s'
-                  % (iteration, np.sum((X - centers_[labels]) ** 2)))
+                  % (iteration, np.sum((X_ - centers_[labels]) ** 2)))
 
         if np.sum(center_shift) < tol:
             print("center shift within tolerance")
