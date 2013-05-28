@@ -6,6 +6,42 @@ from .externals.six import iteritems, with_metaclass
 
 class BaseParameterTranslator(with_metaclass(ABCMeta, BaseEstimator)):
 
+    @property
+    def fit(self):
+        return getattr(self, self._subest_param).fit
+
+    @property
+    def fit_transform(self):
+        return getattr(self, self._subest_param).fit_transform
+
+    @property
+    def fit_predict(self):
+        return getattr(self, self._subest_param).fit_predict
+
+    @property
+    def predict(self):
+        return getattr(self, self._subest_param).predict
+
+    @property
+    def predict_proba(self):
+        return getattr(self, self._subest_param).predict_proba
+
+    @property
+    def decision_function(self):
+        return getattr(self, self._subest_param).decision_function
+
+    @property
+    def score(self):
+        return getattr(self, self._subest_param).score
+
+    @property
+    def transform(self):
+        return getattr(self, self._subest_param).transform
+
+    @property
+    def inverse_transform(self):
+        return getattr(self, self._subest_param).inverse_transform
+
     @abstractmethod
     def _get_translation_rules(self):
         pass
