@@ -18,12 +18,15 @@ import time
 import warnings
 
 import numpy as np
+import numpy.ma.mrecords as mrecords
 
 from .base import BaseEstimator, is_classifier, clone
 from .base import MetaEstimatorMixin
 from .cross_validation import check_cv
 from .externals.joblib import Parallel, delayed, logger
 from .externals import six
+from .externals.six import iteritems
+from .externals.six.moves import zip
 from .utils import safe_mask, check_random_state
 from .utils.validation import _num_samples, check_arrays
 from .metrics import SCORERS, Scorer
@@ -317,6 +320,158 @@ def _check_param_grid(param_grid):
                                  "list.")
 
 
+class SearchResult(object):
+    __slots__ = ('_param_arrays', '_data_arrays', '_fold_weight',
+                 '_score_field', '_greater_is_better')
+
+    def __init__(self, param_arrays, data_arrays, fold_weight=None,
+                 score_field='test_score', greater_is_better=True):
+        self._param_arrays = param_arrays
+        self._data_arrays = data_arrays
+        self._fold_weight = fold_weight
+        self._score_field = score_field
+        self._greater_is_better = greater_is_better
+
+    def __getattr__(self, attr):
+        try:
+            prefix, field = attr.split('_', 1)
+        except ValueError:
+            raise AttributeError('%r has no attribute %r'
+                                 % (self.__class__.__name__, attr))
+        if prefix == 'param':
+            try:
+                return self._param_arrays[field]
+            except (KeyError, ValueError):
+                raise AttributeError('%r has no attribute %r'
+                                     % (self.__class__.__name__, attr))
+        try:
+            data = self._data_arrays[field]
+        except (KeyError, ValueError):
+            raise AttributeError('%r has no attribute %r'
+                                 % (self.__class__.__name__, attr))
+        if prefix == 'fold':
+            return data
+        elif prefix == 'mean':
+            return np.average(data, axis=-1, weights=self._fold_weight)
+        elif prefix == 'std':
+            weight = self._fold_weight
+            if weight is not None:
+                avg = np.average(data, axis=-1, weights=weight)
+                avg.shape = data.shape[:-1]
+                squares = (data.T - avg) ** 2
+                return np.sqrt(np.dot(weight, squares) / np.sum(weight))
+            return np.std(data, axis=-1)
+        raise AttributeError('%r has no attribute %r'
+                             % (self.__class__.__name__, attr))
+
+    def __getitem__(self, index):
+        index = np.asarray(index)
+        if index.dtype == np.bool:
+            index = np.flatnonzero(index)
+        # TODO: validate
+        return self.__class__(
+            {k: v[index] for k, v in iteritems(self._param_arrays)},
+            {k: v[index] for k, v in iteritems(self._data_arrays)},
+            self._fold_weight, self._score_field, self._greater_is_better
+        )
+
+    def __len__(self):
+        shape = np.shape(self._data_arrays[self._score_field])
+        if len(shape) == 1:
+            raise TypeError('Singleton results have no length')
+        return shape[0]
+
+    @property
+    def is_singleton(self):
+        """True if result is for a single candidate"""
+        shape = np.shape(self._data_arrays[self._score_field])
+        return len(shape) == 1
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+    def for_field(self, field, greater_is_better):
+        """Create a new SearchResult, using a given score field."""
+        # TODO: validate
+        return self.__class__(self._param_arrays, self._data_arrays,
+                              self._fold_weight, field, greater_is_better)
+
+    @property
+    def score(self):
+        """Mean score for each candidate"""
+        return getattr(self, 'mean_' + self._score_field)
+
+    def best(self, k=None):
+        """Return a ``SearchResult`` with only the best ``k`` candidates.
+
+        Results will be ordered in decreasing perormance order.
+        For k = None, the best result will be returned, with means given as
+        single values rather than arrays.
+        """
+        order = np.argsort(self.score)
+        if self._greater_is_better:
+            order = order[::-1]
+        if k is not None:
+            return self[order[:k]]
+        return self[order[0]]
+
+    def best_in_margin(self, margin=0.001):
+        scores = self.score
+        if self._greater_is_better:
+            return self[scores >= scores.max() - margin]
+        else:
+            return self[scores <= scores.min() + margin]
+
+    def zipped(self, *attrs):
+        return zip(*[getattr(self, attr) for attr in attrs])
+
+    @property
+    def parameters(self):
+        masked = np.ma.masked
+        names, values = zip(*list(iteritems(self._param_arrays)))
+        if self.is_singleton:
+            return {name: val for name, val in zip(names, values)
+                    if val is not masked}
+        out = []
+        for candidate in zip(*values):
+            out.append({name: val for name, val in zip(names, candidate)
+                        if val is not masked})
+        return out
+
+    def __repr__(self, show_top=3):
+        try:
+            n = len(self)
+        except TypeError:
+            return '<%0.3f for %r>' % (self.score, self.parameters)
+        if show_top < n:
+            suff = ', ...'
+        else:
+            suff = ''
+        return ('<%d candidates. Best results:\n  %s%s>'
+                % (n, ',\n  '.join(repr(sr) for sr in self.best(show_top)),
+                   suff))
+
+
+def _params_to_arrays(parameter_dicts):
+    fields = {}
+    for params in parameter_dicts:
+        for name, value in iteritems(params):
+            fields[name] = value  # take an example for masking
+    field_names = sorted(fields.iterkeys())
+
+    data = []
+    mask = []
+    for params in parameter_dicts:
+        row = [(params[name], False) if name in params
+               else (fields[name], True)
+               for name in field_names]
+        rdata, rmask = zip(*row)
+        data.append(rdata)
+        mask.append(rmask)
+    recs = mrecords.fromrecords(data, mask=mask, names=field_names)
+    return {field: recs[field] for field in field_names}
+
 _CVScoreTuple = namedtuple('_CVScoreTuple',
                            ('parameters', 'mean_validation_score',
                             'cv_validation_scores'))
@@ -481,6 +636,12 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
             cv_scores.append(these_points)
 
         cv_scores = np.asarray(cv_scores)
+
+        self.results_ = SearchResult(
+            _params_to_arrays(list(parameter_iterator)),
+            {'test_score': cv_scores},
+            [len(y[test]) for train, test in cv] if self.iid else None,
+            'test_score', getattr(scorer, 'greater_is_better', True))
 
         # Note: we do not use max(out) to make ties deterministic even if
         # comparison on estimator instances is not deterministic
