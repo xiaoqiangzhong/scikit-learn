@@ -25,7 +25,7 @@ from .base import MetaEstimatorMixin
 from .cross_validation import check_cv
 from .externals.joblib import Parallel, delayed, logger
 from .externals import six
-from .externals.six import iteritems
+from .externals.six import iteritems, iterkeys
 from .externals.six.moves import zip
 from .utils import safe_mask, check_random_state
 from .utils.validation import _num_samples, check_arrays
@@ -525,13 +525,26 @@ class SearchResult(object):
                 % (n, ',\n  '.join(repr(sr) for sr in self.best(show_top)),
                    suff))
 
+    def __array__(self):
+        arrays = [('param_' + k, v) for k, v in iteritems(self._param_arrays)]
+        for field in iterkeys(self._data_arrays):
+            try:
+                arrays.append(('mean_' + field,
+                               getattr(self, 'mean_' + field)))
+                arrays.append(('std_' + field,
+                               getattr(self, 'std_' + field)))
+            except TypeError:
+                continue
+        fields, arrays = zip(*arrays)
+        return mrecords.fromarrays(arrays, names=fields)
+
 
 def _params_to_arrays(parameter_dicts):
     fields = {}
     for params in parameter_dicts:
         for name, value in iteritems(params):
             fields[name] = value  # take an example for masking
-    field_names = sorted(fields.iterkeys())
+    field_names = sorted(iterkeys(fields))
 
     data = []
     mask = []
