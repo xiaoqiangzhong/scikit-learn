@@ -321,6 +321,47 @@ def _check_param_grid(param_grid):
 
 
 class SearchResult(object):
+    """
+    >>> from __future__ import print_function
+    >>> from sklearn.grid_search import GridSearchCV
+    >>> from sklearn.datasets import load_iris
+    >>> from sklearn.svm import SVC
+    >>> iris = load_iris()
+    >>> grid = {'C': [0.01, 0.1, 1], 'degree': [1, 2, 3]}
+    >>> search = GridSearchCV(SVC(kernel='poly'), param_grid=grid)
+    >>> search = search.fit(iris.data, iris.target)
+    >>> res = search.results_
+    >>> res.best().mean_test_score  # doctest: +ELLIPSIS
+    0.973...
+    >>> res  # doctest: +ELLIPSIS
+    <9 candidates. Best results:
+      <0.973 for {'C': 0.1..., 'degree': 3}>,
+      <0.967 for {'C': 1.0, 'degree': 3}>,
+      <0.967 for {'C': 1.0, 'degree': 2}>, ...>
+    >>> res[res.param_degree == 2]  # doctest: +ELLIPSIS
+    <3 candidates. Best results:
+      <0.967 for {'C': 1.0, 'degree': 2}>,
+      <0.967 for {'C': 0.1..., 'degree': 2}>,
+      <0.927 for {'C': 0.01, 'degree': 2}>>
+    >>> res.group_best(['degree'])  # doctest: +ELLIPSIS
+    <3 candidates. Best results:
+      <0.973 for {'C': 0.1..., 'degree': 3}>,
+      <0.967 for {'C': 1.0, 'degree': 2}>,
+      <0.967 for {'C': 1.0, 'degree': 1}>>
+    >>> for tup in res.zipped('parameters', 'mean_test_score',
+    ...                       'std_test_score'):
+    ...     print(*tup)
+    ... # doctest: +ELLIPSIS
+    {'C': 0.01, 'degree': 1} 0.67... 0.03...
+    {'C': 0.01, 'degree': 2} 0.92... 0.00...
+    {'C': 0.01, 'degree': 3} 0.96... 0.01...
+    {'C': 0.10..., 'degree': 1} 0.94 0.01...
+    {'C': 0.10..., 'degree': 2} 0.96... 0.01...
+    {'C': 0.10..., 'degree': 3} 0.97... 0.00...
+    {'C': 1.0, 'degree': 1} 0.96... 0.02...
+    {'C': 1.0, 'degree': 2} 0.96... 0.00...
+    {'C': 1.0, 'degree': 3} 0.96... 0.01...
+    """
     __slots__ = ('_param_arrays', '_data_arrays', '_fold_weight',
                  '_score_field', '_greater_is_better')
 
