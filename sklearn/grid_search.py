@@ -426,6 +426,38 @@ class SearchResult(object):
     def zipped(self, *attrs):
         return zip(*[getattr(self, attr) for attr in attrs])
 
+    def group(self, fields=None, negate=False):
+        """Index candidates by distinct settings of `fields`.
+
+        Requires all parameter values for grouping fields to be hashable and
+        comparable.
+        """
+        items = [(k, v) for k, v in iteritems(self._param_arrays)
+                 if (k in fields) ^ negate]
+        fields, values = zip(*items)
+        values = list(zip(*values))
+        values_arr = np.zeros(len(values), dtype=object)
+        values_arr[:] = values
+        distinct, inverse = np.unique(values_arr, return_inverse=True)
+        return inverse, [dict(zip(fields, values)) for values in distinct]
+
+    def group_best(self, fields=None, negate=False):
+        """Select the best scoring candidate for each setting of ``fields``.
+        """
+        if self._greater_is_better:
+            scores = self.score
+        else:
+            scores = -self.score
+        # Sort with major key groups, minor key score:
+        groups, group_values = self.group(fields, negate)
+        order = np.lexsort((scores, groups))
+        groups = groups[order]
+        # Index marks change from one group to next, i.e. within-group max
+        index = np.empty(len(groups), 'bool')
+        index[-1] = True
+        index[:-1] = groups[1:] != groups[:-1]
+        return self[order[index]]
+
     @property
     def parameters(self):
         masked = np.ma.masked
