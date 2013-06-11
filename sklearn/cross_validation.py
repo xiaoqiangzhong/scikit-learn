@@ -218,7 +218,7 @@ class KFold(object):
         Total number of elements.
 
     n_folds : int, default=3
-        Number of folds.
+        Number of folds. Must be at least 2.
 
     indices : boolean, optional (default True)
         Return train/test split as arrays of indices, rather than a boolean
@@ -274,7 +274,13 @@ class KFold(object):
         self.n = int(n)
         if abs(n_folds - int(n_folds)) >= np.finfo('f').eps:
             raise ValueError("n_folds must be an integer")
-        self.n_folds = int(n_folds)
+        self.n_folds = n_folds = int(n_folds)
+        if n_folds < 2:
+            raise ValueError(
+                "KFold cross validation requires at least one"
+                " train / test split by setting n_folds=2 or more,"
+                " got n_folds=%d."
+                % n_folds)
         self.indices = indices
         self.idxs = np.arange(n)
         if shuffle:
@@ -326,7 +332,7 @@ class StratifiedKFold(object):
         Samples to split in K folds.
 
     n_folds : int, default=3
-        Number of folds.
+        Number of folds. Must be at least 2.
 
     indices : boolean, optional (default True)
         Return train/test split as arrays of indices, rather than a boolean
@@ -366,6 +372,13 @@ class StratifiedKFold(object):
         _validate_kfold(n_folds, n)
         _, y_sorted = unique(y, return_inverse=True)
         min_labels = np.min(np.bincount(y_sorted))
+        n_folds = int(n_folds)
+        if n_folds < 2:
+            raise ValueError(
+                "StratifiedKFold cross validation requires at least one"
+                " train / test split by setting n_folds=2 or more,"
+                " got n_folds=%d."
+                % n_folds)
         if n_folds > min_labels:
             warnings.warn(("The least populated class in y has only %d"
                           " members, which is too few. The minimum"

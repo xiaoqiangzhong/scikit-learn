@@ -121,6 +121,10 @@ API changes summary
    - ``gcv_mode="auto"`` no longer tries to perform SVD on a densified
      sparse matrix in :class:`sklearn.linear_model.RidgeCV`.
 
+   - :class:`cross_valiation.KFold` and
+     :class:`cross_valiation.StratifiedKFold` now enforce `n_folds >= 2`
+     otherwise a ``ValueError`` is raised. By `Olivier Grisel`_.
+
 
 .. _changes_0_13_1:
 
