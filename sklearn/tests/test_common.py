@@ -1,5 +1,5 @@
 """
-General tests for all estimators in sklearn.
+General tests for all estimators in .
 """
 
 # Authors: Andreas Mueller <amueller@ais.uni-bonn.de>
@@ -13,7 +13,6 @@ import sys
 import traceback
 import inspect
 import pickle
-import pkgutil
 
 import numpy as np
 from scipy import sparse
@@ -28,6 +27,7 @@ from sklearn.utils.testing import all_estimators
 from sklearn.utils.testing import meta_estimators
 from sklearn.utils.testing import set_random_state
 from sklearn.utils.testing import assert_greater
+from sklearn.utils.testing import iter_modules
 
 import sklearn
 from sklearn.base import (clone, ClassifierMixin, RegressorMixin,
@@ -987,13 +987,9 @@ def test_cluster_overwrite_params():
 def test_import_all_consistency():
     # Smoke test to check that any name in a __all__ list is actually defined
     # in the namespace of the module or package.
-    for importer, modname, ispkg in pkgutil.walk_packages(
-        path=sklearn.__path__, prefix='sklearn.', onerror=lambda x: None):
-        if ".tests." in modname or not ispkg:
-            continue
-        package = __import__(modname, fromlist="dummy")
-        for name in getattr(package, '__all__', ()):
-            if getattr(package, name, None) is None:
+    for module, modname, ispkg in iter_modules():
+        for name in getattr(module, '__all__', ()):
+            if getattr(module, name, None) is None:
                 raise AttributeError(
                     "Module '{}' has no attribute '{}'".format(
                         modname, name))

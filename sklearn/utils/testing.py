@@ -186,6 +186,17 @@ meta_estimators = ["OneVsOneClassifier",
 other = ["Pipeline", "FeatureUnion", "GridSearchCV", "RandomizedSearchCV"]
 
 
+def iter_modules(include_tests=False, include_externals=False):
+    for importer, modname, ispkg in pkgutil.walk_packages(
+            path=sklearn.__path__, prefix='sklearn.', onerror=lambda x: None):
+        if not include_tests and ".tests." in modname:
+            continue
+        if not include_externals and ".externals." in modname:
+            continue
+        module = __import__(modname, fromlist="dummy")
+        yield module, modname, ispkg
+
+
 def all_estimators(include_meta_estimators=False, include_other=False,
                    type_filter=None):
     """Get a list of all estimators from sklearn.
@@ -229,12 +240,7 @@ def all_estimators(include_meta_estimators=False, include_other=False,
 
     all_classes = []
     # get parent folder
-    path = sklearn.__path__
-    for importer, modname, ispkg in pkgutil.walk_packages(
-            path=path, prefix='sklearn.', onerror=lambda x: None):
-        module = __import__(modname, fromlist="dummy")
-        if ".tests." in modname:
-            continue
+    for module, modname, ispkg in iter_modules():
         classes = inspect.getmembers(module, inspect.isclass)
         all_classes.extend(classes)
 
