@@ -1279,7 +1279,7 @@ def _collect_indices(y):
     return d
 
 
-def _circular_sample(y, n_samples, random_state=None):
+def _circular_sample(initial_n_samples, target_n_samples, random_state=None):
     """Sample without replacement from array in a loop.
 
     Take each sample once per loop except for the last loop, which takes
@@ -1289,15 +1289,15 @@ def _circular_sample(y, n_samples, random_state=None):
     array([0, 0, 1, 1, 2, 2, 0, 2])
     """
     random_state = check_random_state(random_state)
-    n_full_sets = n_samples // len(y)
-    n_remainder = n_samples % len(y)
-    sample_indices = np.empty(n_samples, dtype=int)
-    last_loop_index = n_full_sets * len(y)
+    n_full_sets = target_n_samples // initial_n_samples
+    n_remainder = target_n_samples % initial_n_samples
+    sample_indices = np.empty(target_n_samples, dtype=int)
+    last_loop_index = n_full_sets * initial_n_samples
     sample_indices[:last_loop_index] =\
-        np.repeat(np.arange(len(y)), n_full_sets)
+        np.repeat(np.arange(initial_n_samples), n_full_sets)
     if n_remainder > 0:
         sample_indices[last_loop_index:] = \
-            sample_without_replacement(len(y), n_remainder,
+            sample_without_replacement(initial_n_samples, n_remainder,
                                        random_state=random_state)
     return sample_indices
 
@@ -1332,7 +1332,7 @@ def _scale_n_samples(scaling, n):
         return n
     elif isinstance(scaling, float):
         return scaling * n
-    elif isinstance(scaling, int):
+    elif isinstance(scaling, (numbers.Integral, np.integer)):
         return scaling
     else:
         raise ValueError("Invalid value for scaling, must be "
@@ -1361,7 +1361,7 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
         "undersample" shrinks all classes to the count of the smallest class.
         (None by default)
 
-    scaling : None, integer, float (None by default)
+    scaling : None, integer, float (optional)
         Number of samples to return.
         None outputs the same number of samples.
         `integer` is an absolute number of samples.
@@ -1437,12 +1437,6 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
     (array([2, 2, 1, 2, 2, 0, 2, 2, 2, 2, 1, 2]),
      array([3, 3, 2, 3, 3, 1, 3, 3, 3, 3, 2, 3]))
     """
-    if isinstance(distribution, dict):
-        proba = dict((k, v) for k, v in distribution.items() if v > 0)
-
-    elif distribution not in (None, "balance", "oversample", "undersample"):
-        raise ValueError("Invalid value for distribution: %s" % distribution)
-
     n_samples = _scale_n_samples(scaling, len(y))
 
     random_state = check_random_state(random_state)
@@ -1452,12 +1446,12 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
             # already shuffled after this call
             sample_indices = random_state.randint(0, len(y), n_samples)
         else:
-            sample_indices = _circular_sample(y, n_samples, random_state)
+            sample_indices = _circular_sample(len(y), n_samples, random_state)
             if shuffle:
                 random_state.shuffle(sample_indices)
         return sample_indices
 
-    if distribution in ("balance", "oversample", "undersample"):
+    elif distribution in ("balance", "oversample", "undersample"):
         index_dict = _collect_indices(y)
         indices = index_dict.values()
 
@@ -1471,7 +1465,10 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
             min_count = min(len(a) for a in indices)
             min_count = _scale_n_samples(scaling, min_count)
             counts = [min_count] * len(indices)
-    else:
+
+    elif isinstance(distribution, dict):
+        proba = dict((k, v) for k, v in distribution.items() if v > 0)
+
         index_dict = _collect_indices(y)
         out_classes = np.asarray(proba.keys())
         out_probs = np.asarray(proba.values())
@@ -1498,13 +1495,16 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
         indices = [index_dict[out_classes[k]] for k in seq_index_histogram]
         counts = [seq_index_histogram[k] for k in seq_index_histogram]
 
+    else:
+        raise ValueError("Invalid value for distribution: %s" % distribution)
+
     if replace:
         sample_indices = \
             [[array[i] for i in random_state.randint(0, len(array), count)]
                 for array, count in zip(indices, counts)]
     else:
         sample_indices = \
-            [[array[i] for i in _circular_sample(array, count, random_state)]
+            [[array[i] for i in _circular_sample(len(array), count, random_state)]
                 for array, count in zip(indices, counts)]
     sample_indices = np.concatenate(sample_indices)
 
