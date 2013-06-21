@@ -1465,9 +1465,9 @@ def resample_labels(y, method=None, scaling=None, replace=False,
      array([3, 3, 2, 3, 3, 1, 3, 3, 3, 3, 2, 3]))
     """
     random_state = check_random_state(random_state)
-    n_samples = _scale_n_samples(scaling, len(y))
 
     if method is None:
+        n_samples = _scale_n_samples(scaling, len(y))
         if replace:
             # already shuffled after this call
             sample_indices = random_state.randint(0, len(y), n_samples)
@@ -1481,7 +1481,9 @@ def resample_labels(y, method=None, scaling=None, replace=False,
 
     if method in ('balance', 'oversample', 'undersample'):
         indices = index_dict.values()
-        if method != 'balance':
+        if method == 'balance':
+            n_samples = _scale_n_samples(scaling, len(y))
+        else:
             if method == 'oversample':
                 count = max(len(a) for a in indices)
             else:
@@ -1490,6 +1492,7 @@ def resample_labels(y, method=None, scaling=None, replace=False,
         counts = _fair_array_counts(n_samples, len(index_dict), random_state)
 
     elif isinstance(method, dict):
+        n_samples = _scale_n_samples(scaling, len(y))
         proba = dict((k, v) for k, v in method.items() if v > 0)
         desired_classes = np.asarray(proba.keys())
         desired_probs = np.asarray(proba.values())
