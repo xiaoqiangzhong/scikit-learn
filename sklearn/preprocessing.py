@@ -1285,7 +1285,7 @@ def _circular_sample(initial_n_samples, target_n_samples, random_state=None):
     Take each sample once per loop except for the last loop, which takes
     (n % len(array)) samples at random. Results are returned unshuffled.
 
-    >>> _circular_sample(np.array([0, 1, 2]), 8, random_state=46)
+    >>> _circular_sample(3, 8, random_state=46)
     array([0, 0, 1, 1, 2, 2, 0, 2])
     """
     random_state = check_random_state(random_state)
