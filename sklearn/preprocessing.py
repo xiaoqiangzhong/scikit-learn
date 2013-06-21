@@ -1330,16 +1330,43 @@ def _scale_n_samples(scaling, n):
     """Helper function to scale the number of samples."""
     if scaling is None:
         return n
-    elif isinstance(scaling, float):
-        return scaling * n
-    elif isinstance(scaling, (numbers.Integral, np.integer)):
-        return scaling
     else:
-        raise ValueError("Invalid value for scaling, must be "
-                         "float, int, or None: %s" % scaling)
+        if isinstance(scaling, numbers.Number) and scaling < 0:
+            raise ValueError("Scaling must be nonnegative: %s" % scaling)
+        elif isinstance(scaling, float):
+            return scaling * n
+        elif isinstance(scaling, (numbers.Integral, np.integer)):
+            return scaling
+        else:
+            raise ValueError("Invalid value for scaling, must be "
+                             "float, int, or None: %s" % scaling)
 
 
-def resample_labels(y, distribution=None, scaling=None, replace=False,
+def weighted_sample(probas, n_samples, random_state=None):
+    """Select indices from n_samples with a weighted probability.
+
+    Parameters
+    ---------
+    probas : array-like
+        Array of probabilities summing to 1.
+    n_samples : integer
+        The number of samples to draw from at random.
+    random_state : int, or RandomState instance (optional)
+        Control the sampling for reproducible behavior.
+    """
+    random_state = check_random_state(random_state)
+    if abs(sum(probas) - 1.0) > .011:
+        raise ValueError("Label distribution probabilites must sum to 1")
+    cum_probas = np.cumsum(probas)
+    cum_probas[-1] = 1  # ensure that the probabilities sum to 1
+    space = np.linspace(0, 1, 10000)
+    weighted_indices = np.searchsorted(cum_probas, space)
+    rs = random_state.rand(n_samples)
+    rs *= len(space)
+    return weighted_indices[rs.astype(int)]
+
+
+def resample_labels(y, method=None, scaling=None, replace=False,
                     shuffle=False, random_state=None):
     """Resamples a classes array `y` and returns an array of indices
 
@@ -1353,15 +1380,15 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
         Target classes. Pass in the entire classes array so that
         that this function can work on the class distribution.
 
-    distribution : None, "balance", "oversample", "undersample"
+    method : "balance", "oversample", "undersample", dict (optional)
         None outputs samples with the same class distribution as `y`.
         "balance" rebalances the classes to be equally distributed,
             over/undersampling for `len(y)` samples by default.
         "oversample" grows all classes to the count of the largest class.
         "undersample" shrinks all classes to the count of the smallest class.
-        (None by default)
+        dict with pairs of class, probability with values summing to 1
 
-    scaling : None, integer, float (optional)
+    scaling : integer, float (optional)
         Number of samples to return.
         None outputs the same number of samples.
         `integer` is an absolute number of samples.
@@ -1374,7 +1401,7 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
         Shuffle the indices before returning them. This option can add
         significant overhead, so it is disabled by default.
 
-    random_state : None, int, or RandomState instance (None by default)
+    random_state : int, or RandomState instance (optional)
         Control the sampling for reproducible behavior.
 
     Returns
@@ -1401,7 +1428,7 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
     the class counts.
 
     >>> y = np.array([30, 30, 30, 10, 20, 30])
-    >>> indices = resample_labels(y, distribution="balance", scaling=1.5,
+    >>> indices = resample_labels(y, method="balance", scaling=1.5,
     ...               replace=True, random_state=335)
     >>> indices, y[indices]
     ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
@@ -1411,7 +1438,7 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
     Oversample all classes to the max class count of three samples each.
 
     >>> y = np.array([1, 2, 2, 3, 3, 3])
-    >>> indices = resample_labels(y, distribution="oversample",
+    >>> indices = resample_labels(y, method="oversample",
     ...               random_state=333)
     >>> indices, y[indices]
     ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
@@ -1422,7 +1449,7 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
     scale the number of samples by two.
 
     >>> y = np.array([1, 2, 2, 3, 3, 3])
-    >>> indices = resample_labels(y, distribution="undersample", scaling=2.0,
+    >>> indices = resample_labels(y, method="undersample", scaling=2.0,
     ...     random_state=333)
     >>> indices, y[indices]
     (array([0, 0, 1, 2, 5, 4]), array([1, 1, 2, 2, 3, 3]))
@@ -1430,18 +1457,17 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
     Sample twelve times with a probability dict.
 
     >>> y = np.array([1, 2, 3])
-    >>> indices = resample_labels(y, distribution={1:.1, 2:.1, 3:.8},
+    >>> indices = resample_labels(y, method={1:.1, 2:.1, 3:.8},
     ...     scaling=12, random_state=337, shuffle=True)
     >>> indices, y[indices]
     ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
     (array([2, 2, 1, 2, 2, 0, 2, 2, 2, 2, 1, 2]),
      array([3, 3, 2, 3, 3, 1, 3, 3, 3, 3, 2, 3]))
     """
+    random_state = check_random_state(random_state)
     n_samples = _scale_n_samples(scaling, len(y))
 
-    random_state = check_random_state(random_state)
-
-    if distribution is None:
+    if method is None:
         if replace:
             # already shuffled after this call
             sample_indices = random_state.randint(0, len(y), n_samples)
@@ -1451,52 +1477,34 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
                 random_state.shuffle(sample_indices)
         return sample_indices
 
-    elif distribution in ("balance", "oversample", "undersample"):
-        index_dict = _collect_indices(y)
+    index_dict = _collect_indices(y)
+
+    if method in ('balance', 'oversample', 'undersample'):
         indices = index_dict.values()
+        if method != 'balance':
+            if method == 'oversample':
+                count = max(len(a) for a in indices)
+            else:
+                count = min(len(a) for a in indices)
+            n_samples = _scale_n_samples(scaling, count * len(index_dict))
+        counts = _fair_array_counts(n_samples, len(index_dict), random_state)
 
-        if distribution == "balance":
-            counts = _fair_array_counts(n_samples, len(indices), random_state)
-        elif distribution == "oversample":
-            max_count = max(len(a) for a in indices)
-            max_count = _scale_n_samples(scaling, max_count)
-            counts = [max_count] * len(indices)
-        elif distribution == "undersample":
-            min_count = min(len(a) for a in indices)
-            min_count = _scale_n_samples(scaling, min_count)
-            counts = [min_count] * len(indices)
-
-    elif isinstance(distribution, dict):
-        proba = dict((k, v) for k, v in distribution.items() if v > 0)
-
-        index_dict = _collect_indices(y)
-        out_classes = np.asarray(proba.keys())
-        out_probs = np.asarray(proba.values())
-        diff = set(out_classes) - set(index_dict.keys())
+    elif isinstance(method, dict):
+        proba = dict((k, v) for k, v in method.items() if v > 0)
+        desired_classes = np.asarray(proba.keys())
+        desired_probs = np.asarray(proba.values())
+        diff = set(desired_classes) - set(index_dict.keys())
         if len(diff) > 0:
             raise ValueError("Can't make desired distribution: "
                              "some classes in `proba` dict are not in `y`: %s"
                              % list(diff))
-
-        if abs(sum(out_probs) - 1.0) > .011:
-            raise ValueError("Label distribution probabilites must sum to 1")
-        out_probs = np.cumsum(out_probs)
-        out_probs[-1] = 1  # ensure that the probabilities sum to 1
-
-        # create a lookup table of class indices
-        # faster than binary-searching the cumulative sum for each sample
-        map_length = 10000
-        prob_array = np.searchsorted(out_probs, np.linspace(0, 1, map_length))
-        rs = random_state.rand(n_samples)
-        rs *= map_length
-        seq_indices = prob_array[rs.astype(int)]
+        seq_indices = weighted_sample(desired_probs, n_samples, random_state)
         seq_index_histogram = _histogram(seq_indices)
-
-        indices = [index_dict[out_classes[k]] for k in seq_index_histogram]
+        indices = [index_dict[desired_classes[k]] for k in seq_index_histogram]
         counts = [seq_index_histogram[k] for k in seq_index_histogram]
 
     else:
-        raise ValueError("Invalid value for distribution: %s" % distribution)
+        raise ValueError("Invalid value for method: %s" % method)
 
     if replace:
         sample_indices = \
@@ -1504,7 +1512,8 @@ def resample_labels(y, distribution=None, scaling=None, replace=False,
                 for array, count in zip(indices, counts)]
     else:
         sample_indices = \
-            [[array[i] for i in _circular_sample(len(array), count, random_state)]
+            [[array[i] for i in
+                _circular_sample(len(array), count, random_state)]
                 for array, count in zip(indices, counts)]
     sample_indices = np.concatenate(sample_indices)
 

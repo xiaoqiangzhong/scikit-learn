@@ -793,19 +793,19 @@ def test_resample_labels_same_distribution():
 
 
 def test_resample_balanced():
-    indices = resample_labels(y, scaling=2.0, distribution="balance",
+    indices = resample_labels(y, scaling=2.0, method="balance",
                               replace=False)
     assert_equal(len(indices), 2 * len(y))
 
-    indices = resample_labels(y, scaling=20, distribution="balance",
+    indices = resample_labels(y, scaling=20, method="balance",
                               replace=False)
     assert_equal(len(indices), 2 * len(y))
 
-    indices = resample_labels(y, scaling=2.0, distribution="balance",
+    indices = resample_labels(y, scaling=2.0, method="balance",
                               replace=True)
     assert_equal(len(indices), 2 * len(y))
 
-    indices = resample_labels(y, scaling=20, distribution="balance",
+    indices = resample_labels(y, scaling=20, method="balance",
                               replace=True)
     assert_equal(len(indices), 2 * len(y))
 
@@ -814,78 +814,78 @@ def test_resample_balanced():
     check_mean_std(z, 50.0, 29.1547)
 
     # Should be equal because we sample everything and don't replace
-    indices = resample_labels(z, distribution=None, replace=False,
+    indices = resample_labels(z, method=None, replace=False,
                               random_state=42)
     assert_array_equal(z, z[indices])
 
     # Sample with replacement, should get nearly same mean/std as y
     assert_almost_equal(np.mean(z), 50.0, 3)
-    indices = resample_labels(z, distribution=None, replace=True,
+    indices = resample_labels(z, method=None, replace=True,
                               random_state=42)
     assert_almost_equal(np.mean(z[indices]), 51.2425, 3)
     assert_almost_equal(np.std(z[indices]), 28.5119, 3)
 
-    indices = resample_labels(z, distribution=None, scaling=20000,
+    indices = resample_labels(z, method=None, scaling=20000,
                               replace=True, random_state=42)
     assert_almost_equal(np.mean(z[indices]), 50.0067, 3)
     assert_almost_equal(np.std(z[indices]), 29.2240, 3)
 
 
 def test_resample_labels_oversample():
-    indices = resample_labels(y, distribution="oversample", replace=False)
+    indices = resample_labels(y, method="oversample", replace=False)
     assert_equal(len(indices), 16)
 
-    indices = resample_labels(y, distribution="oversample", replace=True)
+    indices = resample_labels(y, method="oversample", replace=True)
     assert_equal(len(indices), 16)
 
 
 def test_resample_labels_undersample():
-    indices = resample_labels(y, distribution="undersample", replace=False)
+    indices = resample_labels(y, method="undersample", replace=False)
     assert_equal(len(indices), 4)
 
-    indices = resample_labels(y, distribution="undersample", replace=True)
+    indices = resample_labels(y, method="undersample", replace=True)
     assert_equal(len(indices), 4)
 
 
 def test_resample_labels_dict():
     indices = resample_labels(y, scaling=2.0,
-                              distribution={1: .3, 2: .1, 3: .5, 4: .1},
+                              method={1: .3, 2: .1, 3: .5, 4: .1},
                               random_state=42)
     assert_equal(len(indices), 2 * len(y))
     assert_equal(_histogram(y[indices]), {1: 8, 2: 2, 3: 8, 4: 2})
 
     indices = resample_labels(y, scaling=100,
-                              distribution={1: .3, 2: .1, 3: .5, 4: .1},
+                              method={1: .3, 2: .1, 3: .5, 4: .1},
                               random_state=42)
     assert_equal(len(indices), 100)
     assert_equal(_histogram(y[indices]), {1: 34, 2: 12, 3: 45, 4: 9})
 
     indices = resample_labels(y, scaling=100,
-                              distribution={1: .3, 2: .7, 999: 0},
+                              method={1: .3, 2: .7, 999: 0},
                               random_state=42)
     assert_equal(len(indices), 100)
     assert_equal(_histogram(y[indices]), {1: 34, 2: 66})
 
     indices = resample_labels(y, scaling=2.0,
-                              distribution={1: .3, 2: .1, 3: .5, 4: .1},
+                              method={1: .3, 2: .1, 3: .5, 4: .1},
                               replace=True, random_state=42)
     assert_equal(len(indices), 2 * len(y))
     assert_equal(_histogram(y[indices]), {1: 8, 2: 2, 3: 8, 4: 2})
 
     indices = resample_labels(y, scaling=100,
-                              distribution={1: .3, 2: .1, 3: .5, 4: .1},
+                              method={1: .3, 2: .1, 3: .5, 4: .1},
                               replace=True, random_state=42)
     assert_equal(len(indices), 100)
     assert_equal(_histogram(y[indices]), {1: 34, 2: 12, 3: 45, 4: 9})
 
     indices = resample_labels(y, scaling=100,
-                              distribution={1: .3, 2: .7, 999: 0},
+                              method={1: .3, 2: .7, 999: 0},
                               replace=True, random_state=42)
     assert_equal(len(indices), 100)
     assert_equal(_histogram(y[indices]), {1: 34, 2: 66})
 
     indices = resample_labels(y, scaling=100000,
-                              distribution={1: .3, 2: .7, 999: 0},
+                              method={1: .3, 2: .7, 999: 0},
                               replace=True,
                               random_state=42)
     assert_equal(len(indices), 100000)
@@ -894,32 +894,34 @@ def test_resample_labels_dict():
 
 def test_resample_labels_invalid_parameters():
     assert_raises(ValueError, resample_labels, y, scaling=2.0,
-                  distribution="badstring")
-    assert_raises(ValueError, resample_labels, y, distribution="badstring")
-    assert_raises(ValueError, resample_labels, y, distribution={1: .5})
-    assert_raises(ValueError, resample_labels, y, distribution={})
-    assert_raises(ValueError, resample_labels, y, distribution=555)
+                  method="badstring")
+    assert_raises(ValueError, resample_labels, y, scaling=-2.0)
+    assert_raises(ValueError, resample_labels, y, scaling=-2)
+    assert_raises(ValueError, resample_labels, y, method="badstring")
+    assert_raises(ValueError, resample_labels, y, method={1: .5})
+    assert_raises(ValueError, resample_labels, y, method={})
+    assert_raises(ValueError, resample_labels, y, method=555)
     assert_raises(ValueError, _fair_array_counts, 2, 5)
 
 
 def check_mean_std(y, expected_mean, expected_std):
-    indices = resample_labels(y, distribution="balance", replace=False,
+    indices = resample_labels(y, method="balance", replace=False,
                               random_state=42)
     assert_almost_equal(np.mean(y[indices]), expected_mean, 3)
     assert_almost_equal(np.std(y[indices]), expected_std, 3)
 
-    indices = resample_labels(y, distribution="balance", replace=True,
+    indices = resample_labels(y, method="balance", replace=True,
                               random_state=42)
     assert_almost_equal(np.mean(y[indices]), expected_mean, 3)
     assert_almost_equal(np.std(y[indices]), expected_std, 3)
 
     # Scale the dataset and check the invariant
-    indices = resample_labels(y, distribution="balance",
+    indices = resample_labels(y, method="balance",
                               scaling=4.0, replace=False, random_state=42)
     assert_almost_equal(np.mean(y[indices]), expected_mean, 3)
     assert_almost_equal(np.std(y[indices]), expected_std, 3)
 
-    indices = resample_labels(y, distribution="balance", scaling=4.0,
+    indices = resample_labels(y, method="balance", scaling=4.0,
                               replace=True, random_state=42)
     assert_almost_equal(np.mean(y[indices]), expected_mean, 3)
     assert_almost_equal(np.std(y[indices]), expected_std, 3)
@@ -931,18 +933,18 @@ def test_resample_labels_linearly_unbalanced():
     check_mean_std(y, 50.0, 29.1547)
 
     # Should be equal because we sample everything and don't replace
-    indices = resample_labels(y, distribution=None, replace=False,
+    indices = resample_labels(y, method=None, replace=False,
                               random_state=42)
     assert_array_equal(y, y[indices])
 
     # Sample with replacement, should get nearly same mean/std as y
     assert_almost_equal(np.mean(y), 66.6666, 3)
-    indices = resample_labels(y, distribution=None, replace=True,
+    indices = resample_labels(y, method=None, replace=True,
                               random_state=42)
     assert_almost_equal(np.mean(y[indices]), 67.1574, 3)
     assert_almost_equal(np.std(y[indices]), 23.5837, 3)
 
-    indices = resample_labels(y, distribution=None, scaling=10000,
+    indices = resample_labels(y, method=None, scaling=10000,
                               replace=True, random_state=42)
     assert_almost_equal(np.mean(y[indices]), 67.0377, 3)
     assert_almost_equal(np.std(y[indices]), 23.6514, 3)
@@ -956,18 +958,18 @@ def test_resample_labels_quadratically_unbalanced():
     check_mean_std(y, 5.0, 3.1622)
 
     # Should be equal because we sample everything and don't replace
-    indices = resample_labels(y, distribution=None, replace=False,
+    indices = resample_labels(y, method=None, replace=False,
                               random_state=42)
     assert_array_equal(y, y[indices])
 
     # Sample with replacement, should get nearly same mean/std as y
     assert_almost_equal(np.mean(y), 8.9830, 3)
-    indices = resample_labels(y, distribution=None, replace=True,
+    indices = resample_labels(y, method=None, replace=True,
                               random_state=42)
     assert_almost_equal(np.mean(y[indices]), 8.9755, 3)
     assert_almost_equal(np.std(y[indices]), 1.4740, 3)
 
-    indices = resample_labels(y, scaling=4004, distribution=None, replace=True,
+    indices = resample_labels(y, scaling=4004, method=None, replace=True,
                               random_state=42)
     assert_almost_equal(np.mean(y[indices]), 8.9822, 3)
     assert_almost_equal(np.std(y[indices]), 1.4315, 3)
@@ -993,28 +995,28 @@ def test_resample_labels_shuffled():
 
 def test_resample_labels_distribution_shuffled():
     assert_array_equal(
-        resample_labels(y, distribution="balance", replace=False,
+        resample_labels(y, method="balance", replace=False,
                         shuffle=False,
                         random_state=42),
         np.array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7])
     )
 
     assert_array_equal(
-        resample_labels(y, distribution="balance", replace=True,
+        resample_labels(y, method="balance", replace=True,
                         shuffle=False,
                         random_state=42),
         np.array([0, 0, 0, 1, 2, 3, 3, 5, 7, 8])
     )
 
     assert_array_equal(
-        resample_labels(y, distribution="balance", replace=False,
+        resample_labels(y, method="balance", replace=False,
                         shuffle=True,
                         random_state=42),
         np.array([7, 5, 0, 1, 3, 6, 0, 0, 4, 2])
     )
 
     assert_array_equal(
-        resample_labels(y, distribution="balance", replace=True,
+        resample_labels(y, method="balance", replace=True,
                         shuffle=True,
                         random_state=42),
         np.array([0, 3, 8, 0, 7, 0, 1, 2, 5, 3])
@@ -1023,28 +1025,28 @@ def test_resample_labels_distribution_shuffled():
 
 def test_resample_labels_dict_shuffled():
     assert_array_equal(
-        resample_labels(y, distribution={1: .5, 2: .5},
+        resample_labels(y, method={1: .5, 2: .5},
                         replace=False, shuffle=False,
                         random_state=42),
         np.array([0, 0, 0, 0, 1, 1, 1, 2, 2, 2])
     )
 
     assert_array_equal(
-        resample_labels(y, distribution={1: .5, 2: .5},
+        resample_labels(y, method={1: .5, 2: .5},
                         replace=False, shuffle=True,
                         random_state=42),
         np.array([2, 0, 0, 1, 2, 2, 0, 0, 1, 1])
     )
 
     assert_array_equal(
-        resample_labels(y, distribution={1: .5, 2: .5},
+        resample_labels(y, method={1: .5, 2: .5},
                         replace=True, shuffle=False,
                         random_state=42),
         np.array([0, 0, 0, 0, 2, 1, 2, 2, 2, 2])
     )
 
     assert_array_equal(
-        resample_labels(y, distribution={1: .5, 2: .5},
+        resample_labels(y, method={1: .5, 2: .5},
                         replace=True, shuffle=True,
                         random_state=42),
         np.array([2, 0, 2, 2, 0, 2, 0, 2, 0, 1])
