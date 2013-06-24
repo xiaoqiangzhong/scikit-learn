@@ -247,15 +247,23 @@ def mask_by_score(scores, X_shape=None, minimum=None, maximum=None,
         'max', 'sum' or 'size' which evaluate as functions applied to `scores`.
 
     scaling : callable or string, optional
-        As a callable, `minimum` is replaced with `scaling(scores, X_shape[1])(minimum)`, and
+        As a callable, `minimum` is replaced with
+        `scaling(scores, X_shape[1])(minimum)`, and
         similar for `maximum`.  If `scaling` has an attribute `scaled_scores`,
         `minimum` and `maximum` are compared to that value rather than
         `scores`.  A string value will apply a predefined scaler:
-            - 
+            -
+
+    limit : int or float, optional
+        Limits the number of returned features. If the value is positive, takes
+        the `limit` highest-scoring features (after `maximum` and `minimum` are
+        applied); if negative, takes the `limit` lowest scoring features.
+        A value strictly between 0 and 1 (or -1 and 0) is treated as a
+        proportion of the number of features.
 
     Returns
     -------
-    support : 
+    support : array of bools, shape=[number of features]
     """
     scores = np.asarray(scores)
     if X_shape is not None:
@@ -304,4 +312,3 @@ class SelectByScore(BaseEstimator, FeatureSelectionMixin):
         return mask_by_score(self.scores_, self._X_shape,
                              minimum=self.minimum, maximum=self.maximum,
                              scaling=self.scaling, limit=self.limit)
-
