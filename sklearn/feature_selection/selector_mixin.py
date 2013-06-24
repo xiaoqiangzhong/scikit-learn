@@ -12,13 +12,12 @@ from .base import FeatureSelectionMixin
 
 class _Selector(BaseEstimator, FeatureSelectionMixin):
 
-    def __init__(self, estimator, minimum=None, maximum=None, scaling=None,
+    def __init__(self, estimator, minimum=None, maximum=None,
                  limit=None):
         self.estimator = estimator
         self.minimum = minimum
         self.maximum = maximum
         self.limit = limit
-        self.scaling = scaling
         try:
             self._fit()
         except ValueError:
@@ -32,16 +31,10 @@ class _Selector(BaseEstimator, FeatureSelectionMixin):
 
     def _fit(self, X=None):
         self.scores_ = self.estimator._get_feature_importances()
-        if X is not None:
-            if not issparse(X):
-                X = np.array(X)
-            self._X_shape = X.shape
-        else:
-            self._X_shape = None
 
     def _get_support_mask(self):
-        return mask_by_score(self.scores_, self._X_shape, minimum=self.minimum,
-                             maximum=self.maximum, scaling=self.scaling,
+        return mask_by_score(self.scores_, minimum=self.minimum,
+                             maximum=self.maximum,
                              limit=self.limit)
 
 

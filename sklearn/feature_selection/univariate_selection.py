@@ -15,25 +15,12 @@ from scipy.sparse import issparse
 
 from ..base import BaseEstimator
 from ..preprocessing import LabelBinarizer
-from ..utils import (array2d, as_float_array,
-                     atleast2d_or_csr, check_arrays, safe_asarray, safe_sqr,
-                     safe_mask)
+from ..utils import (array2d, atleast2d_or_csr, check_arrays, safe_asarray,
+                     safe_sqr, safe_mask)
 from ..utils.extmath import safe_sparse_dot
 from ..externals import six
-from .etc import mask_by_score, BaseScaler
+from .by_score import mask_by_score
 from .base import FeatureSelectionMixin
-
-
-def _clean_nans(scores):
-    """
-    Fixes Issue #1240: NaNs can't be properly compared, so change them to the
-    smallest value of scores's dtype. -inf seems to be unreliable.
-    """
-    # XXX where should this function be called? fit? scoring functions
-    # themselves?
-    scores = as_float_array(scores, copy=True)
-    scores[np.isnan(scores)] = np.finfo(scores.dtype).min
-    return scores
 
 
 ######################################################################
@@ -273,16 +260,12 @@ class _BaseFilter(six.with_metaclass(ABCMeta, BaseEstimator,
         if not issparse(X):
             X = np.asarray(X)
         print('fit of {}'.format(self))
-        self._X_shape = X.shape
         self.scores_, self.pvalues_ = self.score_func(X, y)
         self.scores_ = np.asarray(self.scores_)
+        if len(self.scores_) != X.shape[1]:
+            raise ValueError("Scores size differs from number of features")
         self.pvalues_ = np.asarray(self.pvalues_)
         return self
-
-    def _get_support_mask(self, scores, minimum=None, maximum=None,
-                          scaling=None, limit=None):
-        return mask_by_score(scores, self._X_shape, minimum=minimum,
-                             maximum=maximum, scaling=scaling, limit=limit)
 
 
 class _PvalueCutoffFilter(_BaseFilter):
@@ -291,14 +274,15 @@ class _PvalueCutoffFilter(_BaseFilter):
         super(_PvalueCutoffFilter, self).__init__(score_func)
 
     def _get_support_mask(self):
-        return super(_PvalueCutoffFilter, self)._get_support_mask(
-            self.pvalues_, maximum=self.alpha, scaling=self.scaling)
+        return mask_by_score(self.scores_, maximum=self._get_threshold())
+
+    def _get_threshold(self):
+        raise NotImplemented
 
 
 class _ScoreLimitFilter(_BaseFilter):
     def _get_support_mask(self, limit):
-        return super(_ScoreLimitFilter, self)._get_support_mask(
-            self.scores_, limit=limit)
+        return mask_by_score(self.scores_, limit=self._get_limit())
 
 
 ######################################################################
@@ -339,7 +323,7 @@ class SelectPercentile(_ScoreLimitFilter):
         self.percentile = percentile
         super(SelectPercentile, self).__init__(score_func)
 
-    def _get_support_mask(self):
+    def _get_limit(self):
         percentile = self.percentile
         if percentile > 100:
             raise ValueError("percentile should be between 0 and 100"
@@ -348,8 +332,7 @@ class SelectPercentile(_ScoreLimitFilter):
             return np.ones(len(self.scores_), dtype=np.bool)
         elif percentile == 0:
             return np.zeros(len(self.scores_), dtype=np.bool)
-        return super(SelectPercentile, self)._get_support_mask(
-            limit=percentile / 100.)
+        return percentile / 100.
 
 
 class SelectKBest(_ScoreLimitFilter):
@@ -384,7 +367,7 @@ class SelectKBest(_ScoreLimitFilter):
         self.k = k
         super(SelectKBest, self).__init__(score_func)
 
-    def _get_support_mask(self):
+    def _get_limit(self):
         k = self.k
         if k == 'all':
             return np.ones(self.scores_.shape, dtype=bool)
@@ -392,7 +375,7 @@ class SelectKBest(_ScoreLimitFilter):
             raise ValueError("Cannot select %d features among %d. "
                              "Use k='all' to return all features."
                              % (k, len(self.scores_)))
-        return super(SelectKBest, self)._get_support_mask(limit=k)
+        return k
 
 
 class SelectFpr(_PvalueCutoffFilter):
@@ -419,7 +402,8 @@ class SelectFpr(_PvalueCutoffFilter):
         p-values of feature scores.
     """
 
-    scaling = None
+    def _get_threshold(self):
+        return self.alpha
 
 
 class SelectFdr(_PvalueCutoffFilter):
@@ -447,14 +431,9 @@ class SelectFdr(_PvalueCutoffFilter):
         p-values of feature scores.
     """
 
-    class scaling(BaseScaler):
-        def __init__(self, scores, num_samples):
-            # TODO: warn for non-unique values
-            self.sorted_scores = np.sort(scores)
-
-        def __call__(self, t):
-            sv = self.sorted_scores
-            return sv[sv < np.arange(0, t * len(sv), t)].max()
+    def _get_threshold(self):
+        sv = np.sort(self.scores_)
+        return sv[sv < np.arange(0, self.alpha * len(sv), self.alpha)].max()
 
 
 class SelectFwe(_PvalueCutoffFilter):
@@ -478,12 +457,8 @@ class SelectFwe(_PvalueCutoffFilter):
         p-values of feature scores.
     """
 
-    class scaling(BaseScaler):
-        def __init__(self, scores, num_samples):
-            self.scores = scores
-
-        def __call__(self, t):
-            return t / len(self.scores)
+    def _get_threshold(self):
+        return self.alpha / len(self.scores_)
 
 
 ######################################################################
@@ -538,7 +513,6 @@ class GenericUnivariateSelect(_BaseFilter):
         selector = self._selection_modes[self.mode](lambda x: x)
         selector.pvalues_ = self.pvalues_
         selector.scores_ = self.scores_
-        selector._X_shape = self._X_shape
         # Now perform some acrobatics to set the right named parameter in
         # the selector
         possible_params = selector._get_param_names()
