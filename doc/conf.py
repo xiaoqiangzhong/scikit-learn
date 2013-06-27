@@ -33,7 +33,8 @@ except:
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['gen_rst',
               'sphinx.ext.autodoc', 'sphinx.ext.autosummary',
-              'sphinx.ext.pngmath', 'numpy_ext.numpydoc'
+              'sphinx.ext.pngmath', 'numpy_ext.numpydoc',
+              'sphinxcontrib.spelling',
               ]
 
 autosummary_generate = True
@@ -122,7 +123,7 @@ html_theme = 'scikit-learn'
 # documentation.
 html_theme_options = {'oldversion': False, 'collapsiblesidebar': True,
                       'google_analytics': True, 'surveybanner': False,
-                      'sprintbanner' : True}
+                      'sprintbanner': True}
 
 # Add any paths that contain custom themes here, relative to this directory.
 html_theme_path = ['themes']
@@ -223,3 +224,6 @@ latex_preamble = """
 #latex_use_modindex = True
 
 trim_doctests_flags = True
+
+spelling_lang = 'en'
+spelling_word_list_filename = 'spelling_wordlist.txt'
