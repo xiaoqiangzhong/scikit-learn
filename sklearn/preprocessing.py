@@ -1523,3 +1523,162 @@ def resample_labels(y, method=None, scaling=None, replace=False,
     if shuffle:
         random_state.shuffle(sample_indices)
     return sample_indices
+
+
+def resample_labels_my_way(y, method=None, scaling=None, replace=False,
+                           shuffle=False, random_state=None):
+    """Resamples a classes array `y` and returns an array of indices
+
+    The default behavior it to output the same ``y``. The additional
+    parameters control the desired class distribution of the indices and the
+    number of samples in the output.
+
+    Parameters
+    ----------
+    y : array-like of shape [n_samples]
+        Target classes. Pass in the entire classes array so that
+        that this function can work on the class distribution.
+
+    method : "balance", "oversample", "undersample", dict (optional)
+        None outputs samples with the same class distribution as `y`.
+        "balance" rebalances the classes to be equally distributed,
+            over/undersampling for `len(y)` samples by default.
+        "oversample" grows all classes to the count of the largest class.
+        "undersample" shrinks all classes to the count of the smallest class.
+        dict with pairs of class, probability with values summing to 1
+
+    scaling : integer, float (optional)
+        Number of samples to return.
+        None outputs the same number of samples.
+        `integer` is an absolute number of samples.
+        `float` is a scale factor.
+
+    replace : boolean (False by default)
+        Sample with replacement when True.
+
+    shuffle : boolean (False by default)
+        Shuffle the indices before returning them. This option can add
+        significant overhead, so it is disabled by default.
+
+    random_state : int, or RandomState instance (optional)
+        Control the sampling for reproducible behavior.
+
+    Returns
+    -------
+    indices : array-like of shape [n_samples']
+        Indices sampled from the dataset respecting a class distribution
+        controlled by this function's parameters.
+
+    Examples
+    --------
+    Sample without replacement to reduce the size of a dataset by half
+    and keep the same class distribution. Note how to apply the indices to X.
+
+    >>> from sklearn.preprocessing import resample_labels
+    >>> import numpy as np
+    >>> X = np.array([[100], [120], [130], [110], [130], [110]])
+    >>> y = np.array([10, 12, 13, 11, 13, 11])
+    >>> indices = resample_labels(y, scaling=.5, random_state=333)
+    >>> indices, X[indices], y[indices]
+    ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
+    (array([3, 1, 2]), array([[110], [120], [130]]), array([11, 12, 13]))
+
+    Sample with replacement the dataset to 1.5 times its size and balance
+    the class counts.
+
+    >>> y = np.array([30, 30, 30, 10, 20, 30])
+    >>> indices = resample_labels(y, method="balance", scaling=1.5,
+    ...               replace=True, random_state=335)
+    >>> indices, y[indices]
+    ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
+    (array([3, 3, 3, 4, 4, 4, 2, 0, 1]),
+     array([10, 10, 10, 20, 20, 20, 30, 30, 30]))
+
+    Oversample all classes to the max class count of three samples each.
+
+    >>> y = np.array([1, 2, 2, 3, 3, 3])
+    >>> indices = resample_labels(y, method="oversample",
+    ...               random_state=333)
+    >>> indices, y[indices]
+    ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
+    (array([0, 0, 0, 1, 2, 2, 3, 4, 5]),
+     array([1, 1, 1, 2, 2, 2, 3, 3, 3]))
+
+    Undersample all classes to the min class count of one sample each and also
+    scale the number of samples by two.
+
+    >>> y = np.array([1, 2, 2, 3, 3, 3])
+    >>> indices = resample_labels(y, method="undersample", scaling=2.0,
+    ...     random_state=333)
+    >>> indices, y[indices]
+    (array([0, 0, 1, 2, 5, 4]), array([1, 1, 2, 2, 3, 3]))
+
+    Sample twelve times with a probability dict.
+
+    >>> y = np.array([1, 2, 3])
+    >>> indices = resample_labels(y, method={1:.1, 2:.1, 3:.8},
+    ...     scaling=12, random_state=337, shuffle=True)
+    >>> indices, y[indices]
+    ... # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
+    (array([2, 2, 1, 2, 2, 0, 2, 2, 2, 2, 1, 2]),
+     array([3, 3, 2, 3, 3, 1, 3, 3, 3, 3, 2, 3]))
+    """
+    random_state = check_random_state(random_state)
+
+    if method is None:
+        n_samples = _scale_n_samples(scaling, len(y))
+        if replace:
+            # already shuffled after this call
+            sample_indices = random_state.randint(0, len(y), n_samples)
+        else:
+            sample_indices = _circular_sample(len(y), n_samples, random_state)
+            if shuffle:
+                random_state.shuffle(sample_indices)
+        return sample_indices
+
+    indices = defaultdict(list)
+    for i, label in enumerate(y):
+        indices[label].append(i)
+    labels, indices = zip(*list(indices.iteritems()))
+
+    if method in ('balance', 'oversample', 'undersample'):
+        if method == 'balance':
+            n_samples = _scale_n_samples(scaling, len(y))
+        else:
+            if method == 'oversample':
+                count = max(len(a) for a in indices)
+            else:
+                count = min(len(a) for a in indices)
+            n_samples = _scale_n_samples(scaling, count * len(indices))
+        counts = _fair_array_counts(n_samples, len(indices), random_state)
+
+    elif isinstance(method, dict):
+        n_samples = _scale_n_samples(scaling, len(y))
+        method = method.copy()
+        try:
+            proba = [method.pop(label) for label in labels]
+        except KeyError:
+            raise ValueError('No probability for %r' % label)
+        if any(v for v in method.itervalues()):
+            raise ValueError('Nonzero probability assigned to labels not in y:'
+                             ' %r'
+                             % [k for k, v in method.iteritems() if v > 0])
+        counts = np.bincount(weighted_sample(proba, n_samples, random_state))
+
+    else:
+        raise ValueError("Invalid value for method: %s" % method)
+
+    if replace:
+        sample_indices = \
+            [[array[i] for i in random_state.randint(0, len(array), count)]
+                for array, count in zip(indices, counts)]
+    else:
+        sample_indices = \
+            [[array[i] for i in
+                _circular_sample(len(array), count, random_state)]
+                for array, count in zip(indices, counts)]
+    sample_indices = np.concatenate(sample_indices)
+
+    if shuffle:
+        random_state.shuffle(sample_indices)
+    return sample_indices
