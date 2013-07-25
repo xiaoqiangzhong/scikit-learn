@@ -1532,36 +1532,6 @@ cdef class Tree:
         self._resize(self.node_count)
         free(stack)
 
-    cpdef predict_leaf(self, np.ndarray[DTYPE_t, ndim=2] X):
-        """Determine the leaf node for samples in X."""
-        cdef SIZE_t* children_left = self.children_left
-        cdef SIZE_t* children_right = self.children_right
-        cdef SIZE_t* feature = self.feature
-        cdef double* threshold = self.threshold
-        cdef SIZE_t n_samples = X.shape[0]
-
-        cdef SIZE_t node_id = 0
-        cdef SIZE_t i
-
-        cdef np.ndarray[SIZE_t, ndim=1] out
-
-        out = np.zeros((n_samples,), dtype=np.int)
-
-        for i from 0 <= i < n_samples:
-            node_id = 0
-
-            # While node_id not a leaf
-            while children_left[node_id] != _TREE_LEAF:
-                # ... and children_right[node_id] != _TREE_LEAF:
-                if X[i, feature[node_id]] <= threshold[node_id]:
-                    node_id = children_left[node_id]
-                else:
-                    node_id = children_right[node_id]
-
-            out[i] = node_id
-
-        return out
-
     cpdef apply(self, np.ndarray[DTYPE_t, ndim=2] X):
         """Finds the terminal region (=leaf node) for each sample in X."""
         cdef SIZE_t* children_left = self.children_left

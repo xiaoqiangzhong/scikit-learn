@@ -280,7 +280,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
                              " input n_features is %s "
                              % (self.n_features_, n_features))
 
-        leaves = self.tree_.predict_leaf(X)
+        leaves = self.tree_.apply(X)
 
         # Classification
         if isinstance(self, ClassifierMixin):
@@ -472,7 +472,7 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
         normalizer[normalizer == 0.0] = 1.0
         proba /= normalizer
 
-        leaves = self.tree_.predict_leaf(X)
+        leaves = self.tree_.apply(X)
         proba = proba[leaves]
         if self.n_outputs_ == 1:
             proba = proba[:, 0, :]
