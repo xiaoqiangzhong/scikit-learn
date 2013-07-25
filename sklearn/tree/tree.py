@@ -295,7 +295,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
             values = self.tree_.value[..., 0]
             if self.n_outputs_ == 1:
                 values = values[:, 0]
-        return values[leaves]
+        return values.take(leaves)
 
     @property
     def feature_importances_(self):
@@ -473,7 +473,7 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
         proba /= normalizer
 
         leaves = self.tree_.apply(X)
-        proba = proba[leaves]
+        proba = proba.take(leaves)
         if self.n_outputs_ == 1:
             proba = proba[:, 0, :]
         else:
