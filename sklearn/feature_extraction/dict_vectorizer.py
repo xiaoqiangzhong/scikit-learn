@@ -1,8 +1,7 @@
 # Author: Lars Buitinck <L.J.Buitinck@uva.nl>
 # License: BSD 3 clause
 
-from array import array
-from collections import Mapping, defaultdict
+from collections import Mapping
 from operator import itemgetter
 
 import numpy as np
@@ -12,6 +11,7 @@ from ..base import BaseEstimator, TransformerMixin
 from ..externals import six
 from ..externals.six.moves import xrange
 from ..utils import atleast2d_or_csr, tosequence
+from .base import vocabulary_transform, vocabulary_fit_transform
 
 
 def _tosequence(X):
@@ -102,33 +102,18 @@ class DictVectorizer(BaseEstimator, TransformerMixin):
         self
         """
 
-        vocabulary = self._new_vocabulary()
-        for x in X:
-            for _, _ in self._encode_features(x, vocabulary):
-                pass
-
-        # sort the feature names to define the mapping
-        feature_names = sorted(vocabulary)
+        feature_names = set(f for x in X for f, v in self._encode_features(x))
+        feature_names = sorted(feature_names)
         self.vocabulary_ = dict((f, i) for i, f in enumerate(feature_names))
         self.feature_names_ = feature_names
         return self
 
-    @staticmethod
-    def _new_vocabulary():
-        # Dict that adds a new value when a new vocabulary item is seen
-        vocabulary = defaultdict(int)
-        vocabulary.default_factory = vocabulary.__len__
-        return vocabulary
-
-    def _encode_features(self, x, vocabulary):
+    def _encode_features(self, x):
         for f, v in six.iteritems(x):
             if isinstance(v, six.string_types):
                 f = "%s%s%s" % (f, self.separator, v)
                 v = 1
-            try:
-                yield vocabulary[f], v
-            except KeyError:
-                pass
+            yield f, v
 
     def fit_transform(self, X, y=None):
         """Learn a list of feature name -> indices mappings and transform X.
@@ -157,23 +142,12 @@ class DictVectorizer(BaseEstimator, TransformerMixin):
             self.fit(X)
             return self.transform(X)
 
-        vocabulary = self._new_vocabulary()
-        Xt = self._transform(X, vocabulary)
-
-        # get names ordered by index
-        _, feature_names = zip(*sorted((v, k)
-                                       for k, v in six.iteritems(vocabulary)))
-        # sort the feature names
-        order = np.argsort(feature_names)
-        self.feature_names_ = list(np.take(feature_names, order))
-        # reindex the vocabulary
-        self.vocabulary_ = dict((f, i)
-                                for i, f in enumerate(self.feature_names_))
-
-        # reorder output columns
-        if self.sparse:
-            Xt = Xt.tocsc()
-        return Xt[:, order]
+        vocabulary, Xt = vocabulary_fit_transform(X, self._encode_features,
+                                                  dtype=self.dtype)
+        self.vocabulary_ = dict(vocabulary)
+        # XXX: repeats sort unnecessarily, but may be faster than iteritems:
+        self.feature_names_ = sorted(vocabulary)
+        return Xt
 
     def inverse_transform(self, X, dict_type=dict):
         """Transform array or sparse matrix X back to feature mappings.
@@ -215,56 +189,6 @@ class DictVectorizer(BaseEstimator, TransformerMixin):
 
         return dicts
 
-    def _transform(self, X, vocabulary):
-        dtype = self.dtype
-
-        if self.sparse:
-            # Sanity check: Python's array has no way of explicitly requesting
-            # the signed 32-bit integers that scipy.sparse needs, so we use the
-            # next best thing: typecode "i" (int). However, if that gives
-            # larger or smaller integers than 32-bit ones, np.frombuffer screws
-            # up.
-            assert array("i").itemsize == 4, (
-                "sizeof(int) != 4 on your platform; please report this at"
-                " https://github.com/scikit-learn/scikit-learn/issues and"
-                " include the output from platform.platform() in your bug"
-                " report")
-            X = [X] if isinstance(X, Mapping) else X
-
-            indices = array("i")
-            indptr = array("i", [0])
-            # XXX we could change values to an array.array as well, but it
-            # would require (heuristic) conversion of dtype to typecode...
-            values = []
-
-            for x in X:
-                for f, v in self._encode_features(x, vocabulary):
-                    indices.append(f)
-                    values.append(dtype(v))
-                indptr.append(len(indices))
-
-            if len(indptr) == 0:
-                raise ValueError("Sample sequence X is empty.")
-
-            if len(indices) > 0:
-                # workaround for bug in older NumPy:
-                # http://projects.scipy.org/numpy/ticket/1943
-                indices = np.frombuffer(indices, dtype=np.intc)
-            indptr = np.frombuffer(indptr, dtype=np.intc)
-            shape = (len(indptr) - 1, len(vocabulary))
-            return sp.csr_matrix((values, indices, indptr),
-                                 shape=shape, dtype=dtype)
-
-        else:
-            X = _tosequence(X)
-            Xa = np.zeros((len(X), len(vocabulary)), dtype=dtype)
-
-            for i, x in enumerate(X):
-                for f, v in self._encode_features(x, vocabulary):
-                    Xa[i, f] = dtype(v)
-
-            return Xa
-
     def transform(self, X, y=None):
         """Transform feature->value dicts to array or sparse matrix.
 
@@ -283,7 +207,9 @@ class DictVectorizer(BaseEstimator, TransformerMixin):
         Xa : {array, sparse matrix}
             Feature vectors; always 2-d.
         """
-        return self._transform(X, self.vocabulary_)
+        X = _tosequence(X)
+        return vocabulary_transform(X, self._encode_features, self.vocabulary_,
+                                    dtype=self.dtype, sparse=self.sparse)
 
     def get_feature_names(self):
         """Returns a list of feature names, ordered by their indices.

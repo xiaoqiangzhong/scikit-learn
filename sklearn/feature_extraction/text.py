@@ -14,7 +14,7 @@ build feature vectors from text documents.
 from __future__ import unicode_literals
 
 import array
-from collections import Mapping, defaultdict
+from collections import Mapping
 import numbers
 from operator import itemgetter
 import re
@@ -30,6 +30,7 @@ from ..preprocessing import normalize
 from .hashing import FeatureHasher
 from .stop_words import ENGLISH_STOP_WORDS
 from sklearn.externals import six
+from .base import vocabulary_transform, vocabulary_fit_transform
 
 __all__ = ['CountVectorizer',
            'ENGLISH_STOP_WORDS',
@@ -610,25 +611,13 @@ class CountVectorizer(BaseEstimator, VectorizerMixin):
             if not isinstance(vocabulary, Mapping):
                 vocabulary = dict((t, i) for i, t in enumerate(vocabulary))
             if not vocabulary:
-                raise ValueError("empty vocabulary passed to fit")
+                raise ValueError("empty vocabulary")
             self.fixed_vocabulary = True
             self.vocabulary_ = dict(vocabulary)
         else:
             self.fixed_vocabulary = False
         self.binary = binary
         self.dtype = dtype
-
-    def _sort_features(self, cscmatrix, vocabulary):
-        """Sort features by name
-
-        Returns a reordered matrix and modifies the vocabulary in place
-        """
-        sorted_features = sorted(six.iteritems(vocabulary))
-        map_index = np.empty(len(sorted_features), dtype=np.int32)
-        for new_val, (term, old_val) in enumerate(sorted_features):
-            map_index[new_val] = old_val
-            vocabulary[term] = new_val
-        return cscmatrix[:, map_index]
 
     def _limit_features(self, cscmatrix, vocabulary, high=None, low=None,
                         limit=None):
@@ -669,50 +658,6 @@ class CountVectorizer(BaseEstimator, VectorizerMixin):
         kept_indices = np.where(mask)[0]
         return cscmatrix[:, kept_indices], removed_terms
 
-    def _count_vocab(self, raw_documents, fixed_vocab):
-        """Create sparse feature matrix, and vocabulary where fixed_vocab=False
-        """
-        if fixed_vocab:
-            vocabulary = self.vocabulary_
-        else:
-            # Add a new value when a new vocabulary item is seen
-            vocabulary = defaultdict(None)
-            vocabulary.default_factory = vocabulary.__len__
-
-        analyze = self.build_analyzer()
-        j_indices = _make_int_array()
-        indptr = _make_int_array()
-        indptr.append(0)
-        for doc in raw_documents:
-            for feature in analyze(doc):
-                try:
-                    j_indices.append(vocabulary[feature])
-                except KeyError:
-                    # Ignore out-of-vocabulary items for fixed_vocab=True
-                    continue
-            indptr.append(len(j_indices))
-
-        if not fixed_vocab:
-            # disable defaultdict behaviour
-            vocabulary = dict(vocabulary)
-            if not vocabulary:
-                raise ValueError("empty vocabulary; perhaps the documents only"
-                                 " contain stop words")
-
-        # some Python/Scipy versions won't accept an array.array:
-        if j_indices:
-            j_indices = np.frombuffer(j_indices, dtype=np.intc)
-        else:
-            j_indices = np.array([], dtype=np.int32)
-        indptr = np.frombuffer(indptr, dtype=np.intc)
-        values = np.ones(len(j_indices))
-
-        X = sp.csr_matrix((values, j_indices, indptr),
-                          shape=(len(indptr) - 1, len(vocabulary)),
-                          dtype=self.dtype)
-        X.sum_duplicates()
-        return vocabulary, X
-
     def fit(self, raw_documents, y=None):
         """Learn a vocabulary dictionary of all tokens in the raw documents.
 
@@ -749,15 +694,21 @@ class CountVectorizer(BaseEstimator, VectorizerMixin):
         min_df = self.min_df
         max_features = self.max_features
 
-        vocabulary, X = self._count_vocab(raw_documents, self.fixed_vocabulary)
+        analyze = self.build_analyzer()
+        get_features = lambda doc: ((term, 1) for term in analyze(doc))
+        if self.fixed_vocabulary:
+            X = vocabulary_transform(raw_documents, get_features,
+                                     self.vocabulary_, dtype=self.dtype)
+        else:
+            vocabulary, X = vocabulary_fit_transform(raw_documents,
+                                                     get_features,
+                                                     dtype=self.dtype)
         X = X.tocsc()
 
         if self.binary:
             X.data.fill(1)
 
         if not self.fixed_vocabulary:
-            X = self._sort_features(X, vocabulary)
-
             n_doc = X.shape[0]
             max_doc_count = (max_df
                              if isinstance(max_df, numbers.Integral)
@@ -793,8 +744,10 @@ class CountVectorizer(BaseEstimator, VectorizerMixin):
         if not hasattr(self, 'vocabulary_') or len(self.vocabulary_) == 0:
             raise ValueError("Vocabulary wasn't fitted or is empty!")
 
-        # use the same matrix-building strategy as fit_transform
-        _, X = self._count_vocab(raw_documents, fixed_vocab=True)
+        analyze = self.build_analyzer()
+        get_features = lambda doc: ((term, 1) for term in analyze(doc))
+        X = vocabulary_transform(raw_documents, get_features,
+                                 self.vocabulary_, dtype=self.dtype)
         if self.binary:
             X.data.fill(1)
         return X
