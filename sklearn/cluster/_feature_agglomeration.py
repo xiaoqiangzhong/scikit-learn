@@ -17,8 +17,28 @@ from ..utils.fixes import unique
 
 class AgglomerationTransform(TransformerMixin):
     """
-    A class for feature agglomeration via the transform interface
+    A mixin for feature agglomeration via the transform interface
+
+    Can be trivially mixed into any clusterer that produces a `labels_`
+    attribute::
+
+        class MyClustererAgglomeration(AgglomerationTransform, MyClusterer):
+            pass
     """
+
+    def fit(self, X, y=None):
+        """Clusters the features of X
+
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            The data
+
+        Returns
+        -------
+        self
+        """
+        return super(AgglomerationTransform, self).fit(X.T)
 
     def transform(self, X, pooling_func=np.mean):
         """

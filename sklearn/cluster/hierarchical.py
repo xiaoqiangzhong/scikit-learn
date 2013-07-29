@@ -455,17 +455,3 @@ class WardAgglomeration(AgglomerationTransform, Ward):
     `n_components_` : int
         The estimated number of connected components in the graph.
     """
-
-    def fit(self, X, y=None, **params):
-        """Fit the hierarchical clustering on the data
-
-        Parameters
-        ----------
-        X : array-like, shape = [n_samples, n_features]
-            The data
-
-        Returns
-        -------
-        self
-        """
-        return Ward.fit(self, X.T, **params)
