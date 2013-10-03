@@ -20,7 +20,7 @@ from ..base import BaseEstimator, TransformerMixin
 from ..utils import (array2d, as_float_array, atleast2d_or_csr,
                      check_random_state)
 from ..utils.extmath import randomized_svd, safe_sparse_dot, svd_flip
-from ..utils.sparsefuncs import mean_variance_axis0
+from ..utils.sparsefuncs import mean_variance_axis
 
 __all__ = ["TruncatedSVD"]
 
@@ -183,7 +183,7 @@ class TruncatedSVD(BaseEstimator, TransformerMixin):
         X_transformed = np.dot(U, np.diag(Sigma))
         self.explained_variance_ = exp_var = np.var(X_transformed, axis=0)
         if sp.issparse(X):
-            _, full_var = mean_variance_axis0(X)
+            _, full_var = mean_variance_axis(X, axis=0)
             full_var = full_var.sum()
         else:
             full_var = np.var(X, axis=0).sum()

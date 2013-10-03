@@ -20,7 +20,7 @@ from ..base import BaseEstimator, TransformerMixin
 from ..utils import array2d, check_random_state, as_float_array
 from ..utils import atleast2d_or_csr
 from ..utils import deprecated
-from ..utils.sparsefuncs import mean_variance_axis0
+from ..utils.sparsefuncs import mean_variance_axis
 from ..utils.extmath import (fast_logdet, safe_sparse_dot, randomized_svd,
                              fast_dot)
 
@@ -690,7 +690,7 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
 
         self.explained_variance_ = exp_var = (S ** 2) / n_samples
         if sparse.issparse(X):
-            _, full_var = mean_variance_axis0(X)
+            _, full_var = mean_variance_axis(X, axis=0)
             full_var = full_var.sum()
         else:
             full_var = np.var(X, axis=0).sum()
