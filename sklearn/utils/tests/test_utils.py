@@ -93,6 +93,9 @@ def test_safe_mask():
     mask = safe_mask(X_csr, mask)
     assert_equal(X_csr[mask].shape[0], 3)
 
+    mask = safe_mask(X, slice(-3, None))
+    assert_equal(X[mask].shape[0], 3)
+
 
 def test_pinvh_simple_real():
     a = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 10]], dtype=np.float64)

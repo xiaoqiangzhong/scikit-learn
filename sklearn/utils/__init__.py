@@ -117,13 +117,15 @@ def safe_mask(X, mask):
     X : {array-like, sparse matrix}
         Data on which to apply mask.
 
-    mask: array
+    mask: array or slice
         Mask to be used on X.
 
     Returns
     -------
         mask
     """
+    if isinstance(mask, slice):
+        return mask
     mask = np.asarray(mask)
     if np.issubdtype(mask.dtype, np.int):
         return mask
