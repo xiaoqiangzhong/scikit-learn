@@ -51,6 +51,8 @@ def clone(estimator, safe=True):
         that are not estimators.
 
     """
+    if hasattr(estimator, 'clone'):
+        return estimator.clone()
     estimator_type = type(estimator)
     # XXX: not handling dictionaries
     if estimator_type in (list, tuple, set, frozenset):
