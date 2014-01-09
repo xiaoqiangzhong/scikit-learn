@@ -5,6 +5,7 @@
 
 # See _tree.pyx for details.
 
+from cython.view cimport contiguous
 import numpy as np
 cimport numpy as np
 
@@ -108,13 +109,22 @@ cdef class Splitter:
 # Tree
 # =============================================================================
 
+cdef struct Node:
+    # Does not store values at node, as shape is not known at compile time
+    SIZE_t left_child
+    SIZE_t right_child
+    SIZE_t feature
+    DOUBLE_t threshold
+    DOUBLE_t impurity
+    SIZE_t n_samples
+
+
 cdef class Tree:
     # Input/Output layout
     cdef public SIZE_t n_features        # Number of features in X
     cdef SIZE_t* n_classes               # Number of classes in y[:, k]
     cdef public SIZE_t n_outputs         # Number of outputs in y
     cdef public SIZE_t max_n_classes     # max(n_classes)
-    cdef public SIZE_t value_stride      # n_outputs * max_n_classes
 
     # Parameters
     cdef public Splitter splitter        # Splitting algorithm
@@ -127,13 +137,10 @@ cdef class Tree:
     # Inner structures
     cdef public SIZE_t node_count        # Counter for node IDs
     cdef public SIZE_t capacity          # Capacity of tree, in terms of nodes
-    cdef SIZE_t* children_left           # children_left[i] is the left child of node i
-    cdef SIZE_t* children_right          # children_right[i] is the right child of node i
-    cdef SIZE_t* feature                 # features[i] is the feature used for splitting node i
-    cdef double* threshold               # threshold[i] is the threshold value at node i
-    cdef double* value                   # value[i * value_stride:(i+1) * value_stride] are the values contained at node i
-    cdef double* impurity                # impurity[i] is the impurity of node i (i.e., the value of the criterion)
-    cdef SIZE_t* n_node_samples          # n_node_samples[i] is the number of samples at node i
+    cdef object node_ndarray             # dtype is record; maintains ownership of data
+    cdef Node[::contiguous] nodes        # duplicate pointer for fast internal use; stride known at compile time
+    cdef object value_ndarray            # maintains ownership of data
+    cdef double[::, ::, ::1] value       # duplicate pointer for fast internal use
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent,
