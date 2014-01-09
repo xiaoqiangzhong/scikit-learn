@@ -1639,7 +1639,7 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
 
                 if is_leaf:
                     # Don't store value for internal nodes
-                    splitter.node_value(&tree.value[node_id, 0, 0])
+                    splitter.node_value(tree.value + node_id * tree.value_stride)
 
                 else:
                     # Push right child on stack
@@ -1699,11 +1699,12 @@ cdef void _add_split_node(Splitter splitter, Tree tree,
                                 &split_improvement)
             is_leaf = is_leaf or (pos >= end)
 
-        node_id = tree._add_node(parent - &tree.nodes[0], is_left, is_leaf,
+        node_id = tree._add_node(parent - tree.nodes if parent != NULL else _TREE_UNDEFINED,
+                                 is_left, is_leaf,
                                  feature, threshold, impurity, n_node_samples)
 
         # compute values also for split nodes (might become leafs later).
-        splitter.node_value(&tree.value[node_id, 0, 0])
+        splitter.node_value(tree.value + node_id * tree.value_stride)
 
         res.node_id = node_id
         res.start = start
@@ -1792,7 +1793,7 @@ cdef class BestFirstTreeBuilder(TreeBuilder):
             while not frontier.is_empty():
                 frontier.pop(&record)
 
-                node = &tree.nodes[0] + record.node_id
+                node = &tree.nodes[record.node_id]
                 is_leaf = (record.is_leaf or max_split_nodes <= 0)
 
                 if is_leaf:
@@ -1937,6 +1938,7 @@ cdef class Tree:
             raise MemoryError()
 
         self.max_n_classes = np.max(n_classes)
+        self.value_stride = n_outputs * self.max_n_classes
 
         cdef SIZE_t k
 
@@ -1955,9 +1957,9 @@ cdef class Tree:
         self.node_count = 0
         self.capacity = 0
         self.value_ndarray = None
-        self.value = None
+        self.value = NULL
         self.node_ndarray = None
-        self.nodes = None
+        self.nodes = NULL
 
     def __dealloc__(self):
         """Destructor."""
@@ -1990,9 +1992,9 @@ cdef class Tree:
 
         if 'nodes' in d:
             self.node_ndarray = d['nodes']
-            self.nodes = self.node_ndarray
+            self.nodes = <Node *>(<np.ndarray> self.node_ndarray).data
             self.value_ndarray = d['values']
-            self.value = self.value_ndarray
+            self.value = <double *>(<np.ndarray> self.value_ndarray).data
         else:
             # Backwards-compatible
             # TODO: test
@@ -2027,15 +2029,12 @@ cdef class Tree:
                 self.value_ndarray = np.zeros(value_shape, dtype=np.float64,
                                               order='C')
             else:
-                self.nodes = None
-                self.value = None
-                # Will fail if references exist
                 self.node_ndarray.resize(capacity)
                 self.value_ndarray.resize(value_shape)
 
             # Typed MemoryViews are efficient to access
-            self.nodes = self.node_ndarray
-            self.value = self.value_ndarray
+            self.nodes = <Node *>(<np.ndarray> self.node_ndarray).data
+            self.value = <double *>(<np.ndarray> self.value_ndarray).data
 
         # if capacity smaller than node_count, adjust the counter
         if capacity < self.node_count:
@@ -2055,7 +2054,7 @@ cdef class Tree:
         if node_id >= self.capacity:
             self._resize()
 
-        cdef Node *node = &(self.nodes[node_id])
+        cdef Node *node = &self.nodes[node_id]
         node.impurity = impurity
         node.n_samples = n_node_samples
 
@@ -2098,17 +2097,17 @@ cdef class Tree:
 
         with nogil:
             for i from 0 <= i < n_samples:
-                node = &(self.nodes[0])
+                node = self.nodes
 
                 # While node not a leaf
                 while node.left_child != _TREE_LEAF:
                     # ... and node.right_child != _TREE_LEAF:
                     if X[i, node.feature] <= node.threshold:
-                        node = &(self.nodes[node.left_child])
+                        node = &self.nodes[node.left_child]
                     else:
-                        node = &(self.nodes[node.right_child])
+                        node = &self.nodes[node.right_child]
 
-                out[i] = <SIZE_t>(node - &(self.nodes[0]))  # node offset
+                out[i] = <SIZE_t>(node - self.nodes)  # node offset
 
         return out_array
 
@@ -2118,8 +2117,8 @@ cdef class Tree:
         cdef SIZE_t n_right
         cdef Node *left
         cdef Node *right
-        cdef Node[:] nodes = self.nodes
-        cdef Node *node = &(self.nodes[0])
+        cdef Node *nodes = self.nodes
+        cdef Node *node = nodes
         cdef Node *end_node = node + self.node_count
 
         cdef np.ndarray[np.float64_t, ndim=1] importances

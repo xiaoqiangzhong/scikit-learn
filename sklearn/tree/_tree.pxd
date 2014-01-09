@@ -138,9 +138,10 @@ cdef class Tree:
     cdef public SIZE_t node_count        # Counter for node IDs
     cdef public SIZE_t capacity          # Capacity of tree, in terms of nodes
     cdef object node_ndarray             # dtype is record; maintains ownership of data
-    cdef Node[::contiguous] nodes        # duplicate pointer for fast internal use; stride known at compile time
+    cdef Node *nodes                     # duplicate pointer for fast internal use; stride known at compile time
     cdef object value_ndarray            # maintains ownership of data
-    cdef double[::, ::, ::1] value       # duplicate pointer for fast internal use
+    cdef double *value                   # duplicate pointer for fast internal use
+    cdef SIZE_t value_stride             # = n_outputs * max_n_classes
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent,

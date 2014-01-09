@@ -127,7 +127,7 @@ def predict_stages(np.ndarray[object, ndim=2] estimators,
             # need brackets because of casting operator priority
             _predict_regression_tree_inplace_fast(
                 X,
-                &(tree.nodes[0]), &(tree.value[0, 0, 0]),
+                tree.nodes, tree.value,
                 scale, k,
                 out)
             ## out += scale * tree.predict(X).reshape((X.shape[0], 1))
@@ -195,8 +195,8 @@ cpdef _partial_dependence_tree(Tree tree, DTYPE_t[:, ::1] X,
     """
     cdef Py_ssize_t i = 0
     cdef Py_ssize_t n_features = X.shape[1]
-    cdef Node* root_node = &(tree.nodes[0])
-    cdef double *value = &(tree.value[0, 0, 0])
+    cdef Node* root_node = tree.nodes
+    cdef double *value = tree.value
     cdef SIZE_t node_count = tree.node_count
 
     cdef SIZE_t stack_capacity = node_count * 2
