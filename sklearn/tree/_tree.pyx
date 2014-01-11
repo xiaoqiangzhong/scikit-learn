@@ -1671,57 +1671,57 @@ cdef void _add_split_node(Splitter splitter, Tree tree,
                           SIZE_t start, SIZE_t end, double impurity,
                           bint is_first, bint is_left, Node *parent,
                           SIZE_t depth, PriorityHeapRecord* res) nogil:
-        """Adds node w/ partition ``[start, end)`` to the frontier. """
-        cdef SIZE_t pos
-        cdef SIZE_t feature
-        cdef SIZE_t node_id
-        cdef double threshold
-        cdef double split_impurity_left
-        cdef double split_impurity_right
-        cdef double split_improvement
-        cdef SIZE_t n_node_samples
-        cdef bint is_leaf
-        cdef SIZE_t n_left, n_right
-        cdef double imp_diff
+    """Adds node w/ partition ``[start, end)`` to the frontier. """
+    cdef SIZE_t pos
+    cdef SIZE_t feature
+    cdef SIZE_t node_id
+    cdef double threshold
+    cdef double split_impurity_left
+    cdef double split_impurity_right
+    cdef double split_improvement
+    cdef SIZE_t n_node_samples
+    cdef bint is_leaf
+    cdef SIZE_t n_left, n_right
+    cdef double imp_diff
 
-        splitter.node_reset(start, end)  # calls criterion.init
-        if is_first:
-            impurity = splitter.criterion.node_impurity()
+    splitter.node_reset(start, end)  # calls criterion.init
+    if is_first:
+        impurity = splitter.criterion.node_impurity()
 
-        n_node_samples = end - start
-        is_leaf = ((depth > tree.max_depth) or
-                   (n_node_samples < tree.min_samples_split) or
-                   (n_node_samples < 2 * tree.min_samples_leaf))
+    n_node_samples = end - start
+    is_leaf = ((depth > tree.max_depth) or
+               (n_node_samples < tree.min_samples_split) or
+               (n_node_samples < 2 * tree.min_samples_leaf))
 
-        if not is_leaf:
-            splitter.node_split(impurity, &pos, &feature, &threshold,
-                                &split_impurity_left, &split_impurity_right,
-                                &split_improvement)
-            is_leaf = is_leaf or (pos >= end)
+    if not is_leaf:
+        splitter.node_split(impurity, &pos, &feature, &threshold,
+                            &split_impurity_left, &split_impurity_right,
+                            &split_improvement)
+        is_leaf = is_leaf or (pos >= end)
 
-        node_id = tree._add_node(parent - tree.nodes if parent != NULL else _TREE_UNDEFINED,
-                                 is_left, is_leaf,
-                                 feature, threshold, impurity, n_node_samples)
+    node_id = tree._add_node(parent - tree.nodes if parent != NULL else _TREE_UNDEFINED,
+                             is_left, is_leaf,
+                             feature, threshold, impurity, n_node_samples)
 
-        # compute values also for split nodes (might become leafs later).
-        splitter.node_value(tree.value + node_id * tree.value_stride)
+    # compute values also for split nodes (might become leafs later).
+    splitter.node_value(tree.value + node_id * tree.value_stride)
 
-        res.node_id = node_id
-        res.start = start
-        res.end = end
-        res.depth = depth
-        res.impurity = impurity
+    res.node_id = node_id
+    res.start = start
+    res.end = end
+    res.depth = depth
+    res.impurity = impurity
 
-        if not is_leaf:
-            # is split node
-            res.pos = pos
-            res.is_leaf = 0
-            res.improvement = split_improvement
-        else:
-            # is leaf => 0 improvement
-            res.pos = end
-            res.is_leaf = 1
-            res.improvement = 0.0
+    if not is_leaf:
+        # is split node
+        res.pos = pos
+        res.is_leaf = 0
+        res.improvement = split_improvement
+    else:
+        # is leaf => 0 improvement
+        res.pos = end
+        res.is_leaf = 1
+        res.improvement = 0.0
 
 
 cdef int _add_to_frontier(PriorityHeapRecord* rec, PriorityHeap frontier) nogil:
