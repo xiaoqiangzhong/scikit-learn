@@ -1,6 +1,7 @@
 # Authors: Gilles Louppe <g.louppe@gmail.com>
 #          Peter Prettenhofer <peter.prettenhofer@gmail.com>
 #          Brian Holt <bdholt1@gmail.com>
+#          Joel Nothman <joel.nothman@gmail.com>
 # Licence: BSD 3 clause
 
 # See _tree.pyx for details.
@@ -134,12 +135,13 @@ cdef class Tree:
     cdef public object random_state      # Random state
     cdef public int max_leaf_nodes       # Number of leafs to grow
 
-    # Inner structures
+    # Inner structures: values are stored separately from node structure,
+    # since size determined at runtime.
     cdef public SIZE_t node_count        # Counter for node IDs
     cdef public SIZE_t capacity          # Capacity of tree, in terms of nodes
-    cdef object node_ndarray             # dtype is record; maintains ownership of data
-    cdef Node *nodes                     # duplicate pointer for fast internal use; stride known at compile time
-    cdef object value_ndarray            # maintains ownership of data
+    cdef object node_ndarray             # 1d struct array; owns data
+    cdef Node *nodes                     # duplicate pointer for fast internal use
+    cdef object value_ndarray            # (capacity, n_outputs, max_n_classes)
     cdef double *value                   # duplicate pointer for fast internal use
     cdef SIZE_t value_stride             # = n_outputs * max_n_classes
 

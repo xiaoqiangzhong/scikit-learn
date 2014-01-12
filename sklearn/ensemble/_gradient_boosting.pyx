@@ -38,12 +38,15 @@ ctypedef np.npy_intp SIZE_t
 # constant to mark tree leafs
 cdef int LEAF = -1
 
-cdef void _predict_regression_tree_inplace_fast(DTYPE_t[:, ::1] X,
+cdef void _predict_regression_tree_inplace_fast(DTYPE_t *X,
                                                 Node* root_node,
                                                 double *value,
                                                 double scale,
                                                 Py_ssize_t k,
-                                                float64[:, :] out):
+                                                Py_ssize_t K,
+                                                Py_ssize_t n_samples,
+                                                Py_ssize_t n_features,
+                                                float64 *out):
     """Predicts output for regression tree and stores it in ``out[i, k]``.
 
     This function operates directly on the data arrays of the tree
@@ -58,15 +61,8 @@ cdef void _predict_regression_tree_inplace_fast(DTYPE_t[:, ::1] X,
     X : DTYPE_t pointer
         The pointer to the data array of the input ``X``.
         Assumes that the array is c-continuous.
-    children : np.npy_intp pointer
-        The pointer to the data array of the ``children`` array attribute
-        of the :class:``sklearn.tree.Tree``.
-    feature : np.npy_intp pointer
-        The pointer to the data array of the ``feature`` array attribute
-        of the :class:``sklearn.tree.Tree``.
-    threshold : np.float64_t pointer
-        The pointer to the data array of the ``threshold`` array attribute
-        of the :class:``sklearn.tree.Tree``.
+    root_node : tree Node pointer
+        Pointer to the main node array of the :class:``sklearn.tree.Tree``.
     value : np.float64_t pointer
         The pointer to the data array of the ``value`` array attribute
         of the :class:``sklearn.tree.Tree``.
@@ -92,15 +88,15 @@ cdef void _predict_regression_tree_inplace_fast(DTYPE_t[:, ::1] X,
     cdef Py_ssize_t i
     cdef int32 node_id
     cdef Node *node
-    for i in range(X.shape[0]):
+    for i in range(n_samples):
         node = root_node
         # While node not a leaf
         while node.left_child != -1 and node.right_child != -1:
-            if X[i, node.feature] <= node.threshold:
+            if X[i * n_features + node.feature] <= node.threshold:
                 node = root_node + node.left_child
             else:
                 node = root_node + node.right_child
-        out[i, k] += scale * value[node - root_node]
+        out[i * K + k] += scale * value[node - root_node]
 
 
 @cython.nonecheck(False)
@@ -126,10 +122,10 @@ def predict_stages(np.ndarray[object, ndim=2] estimators,
             # and get data pointer
             # need brackets because of casting operator priority
             _predict_regression_tree_inplace_fast(
-                X,
+                <DTYPE_t*> X.data,
                 tree.nodes, tree.value,
-                scale, k,
-                out)
+                scale, k, K, X.shape[0], X.shape[1],
+                <float64 *> (<np.ndarray> out).data)
             ## out += scale * tree.predict(X).reshape((X.shape[0], 1))
 
 

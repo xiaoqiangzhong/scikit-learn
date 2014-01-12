@@ -8,6 +8,7 @@
 #          Noel Dawe <noel@dawe.me>
 #          Satrajit Gosh <satrajit.ghosh@gmail.com>
 #          Lars Buitinck <L.J.Buitinck@uva.nl>
+#          Joel Nothman <joel.nothman@gmail.com>
 #
 # Licence: BSD 3 clause
 
@@ -1877,7 +1878,7 @@ cdef class BestFirstTreeBuilder(TreeBuilder):
 # =============================================================================
 
 cdef class Tree:
-    """Struct-of-arrays representation of a binary decision tree.
+    """Array-based representation of a binary decision tree.
 
     The binary tree is represented as a number of parallel arrays. The i-th
     element of each array holds information about the node `i`. Node 0 is the
@@ -1892,40 +1893,42 @@ cdef class Tree:
         The number of nodes (internal nodes + leaves) in the tree.
 
     capacity : int
-        The current capacity (i.e., size) of the arrays.
+        The current capacity (i.e., size) of the arrays, which is at least as
+        great as `node_count`.
 
-    children_left : int*
+    children_left : array of int, shape [node_count]
         children_left[i] holds the node id of the left child of node i.
         For leaves, children_left[i] == TREE_LEAF. Otherwise,
         children_left[i] > i. This child handles the case where
         X[:, feature[i]] <= threshold[i].
 
-    children_right : int*
+    children_right : array of int, shape [node_count]
         children_right[i] holds the node id of the right child of node i.
         For leaves, children_right[i] == TREE_LEAF. Otherwise,
         children_right[i] > i. This child handles the case where
         X[:, feature[i]] > threshold[i].
 
-    feature : int*
+    feature : array of int, shape [node_count]
         feature[i] holds the feature to split on, for the internal node i.
 
-    threshold : double*
+    threshold : array of double, shape [node_count]
         threshold[i] holds the threshold for the internal node i.
 
-    value : double*
+    value : array of double, shape [node_count, n_outputs, ]
         Contains the constant prediction value of each node.
 
-    impurity : double*
+    impurity : array of double, shape [node_count]
         impurity[i] holds the impurity (i.e., the value of the splitting
         criterion) at node i.
 
-    n_node_samples : int*
+    n_node_samples : array of int, shape [node_count]
         n_samples[i] holds the number of training samples reaching node i.
     """
     # Wrap for outside world
     property n_classes:
         def __get__(self):
-            return sizet_ptr_to_ndarray(self.n_classes, self.n_outputs)
+            # it's small; copy for memory safety
+            return sizet_ptr_to_ndarray(self.n_classes, self.n_outputs).copy()
 
     property children_left:
         def __get__(self):
@@ -2026,22 +2029,24 @@ cdef class Tree:
         """Setstate re-implementation, for unpickling."""
         self.node_count = d["node_count"]
 
-        if 'nodes' in d:
-            self.node_ndarray = d['nodes']
-            self.nodes = <Node *>(<np.ndarray> self.node_ndarray).data
-            self.value_ndarray = d['values']
-            self.value = <double *>(<np.ndarray> self.value_ndarray).data
-        else:
-            # Backwards-compatible
-            # TODO: test
-            self._resize(d["capacity"])
-            self.node_ndarray['left_child'][:] = d['children_left']
-            self.node_ndarray['right_child'][:] = d['children_right']
-            self.node_ndarray['feature'][:] = d['feature']
-            self.node_ndarray['threshold'][:] = d['threshold']
-            self.node_ndarray['impurity'][:] = d['impurity']
-            self.node_ndarray['n_samples'][:] = d['n_node_samples']
-            self.value_ndarray[:] = d['value']
+        if 'nodes' not in d:
+            raise ValueError('You have loaded Tree version which '
+                             'cannot be imported')
+
+        self.node_ndarray = d['nodes']
+        self.nodes = <Node *>(<np.ndarray> self.node_ndarray).data
+        self.value_ndarray = d['values']
+        self.value = <double *>(<np.ndarray> self.value_ndarray).data
+        self.capacity = self.node_ndarray.shape[0]
+
+        value_shape = (self.capacity, self.n_outputs, self.max_n_classes)
+        if (self.node_ndarray.ndim != 1
+         or self.node_ndarray.dtype != NODE_DTYPE
+         or not self.node_ndarray.flags.c_contiguous
+         or self.value_ndarray.shape != value_shape
+         or not self.value_ndarray.flags.c_contiguous
+         or self.value_ndarray.dtype != np.float64):
+            raise ValueError('Did not recognise loaded array layout')
 
     cdef void _resize(self, SIZE_t capacity):
         """Resize all inner arrays to `capacity`, if `capacity` == -1, then
@@ -2072,8 +2077,9 @@ cdef class Tree:
                 self.value_ndarray = np.zeros(value_shape, dtype=np.float64,
                                               order='C')
             else:
-                self.node_ndarray.resize(capacity)
-                self.value_ndarray.resize(value_shape)
+                # We only expect other references once building is complete
+                self.node_ndarray.resize(capacity, refcheck=False)
+                self.value_ndarray.resize(value_shape, refcheck=False)
 
             # Typed MemoryViews are efficient to access
             self.nodes = <Node *>(<np.ndarray> self.node_ndarray).data
@@ -2213,23 +2219,11 @@ cdef inline UINT32_t our_rand_r(UINT32_t* seed) nogil:
 
     return seed[0] % (<UINT32_t>RAND_R_MAX + 1)
 
-cdef inline np.ndarray int_ptr_to_ndarray(int* data, SIZE_t size):
-    """Encapsulate data into a 1D numpy array of int's."""
-    cdef np.npy_intp shape[1]
-    shape[0] = <np.npy_intp> size
-    return np.PyArray_SimpleNewFromData(1, shape, np.NPY_INT, data)
-
 cdef inline np.ndarray sizet_ptr_to_ndarray(SIZE_t* data, SIZE_t size):
     """Encapsulate data into a 1D numpy array of intp's."""
     cdef np.npy_intp shape[1]
     shape[0] = <np.npy_intp> size
     return np.PyArray_SimpleNewFromData(1, shape, np.NPY_INTP, data)
-
-cdef inline np.ndarray double_ptr_to_ndarray(double* data, SIZE_t size):
-    """Encapsulate data into a 1D numpy array of double's."""
-    cdef np.npy_intp shape[1]
-    shape[0] = <np.npy_intp> size
-    return np.PyArray_SimpleNewFromData(1, shape, np.NPY_DOUBLE, data)
 
 cdef inline SIZE_t rand_int(SIZE_t end, UINT32_t* random_state) nogil:
     """Generate a random integer in [0; end)."""
