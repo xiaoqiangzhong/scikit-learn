@@ -1848,6 +1848,9 @@ cdef class BestFirstTreeBuilder(TreeBuilder):
                     if rc == -1:
                         break
 
+                    # tree.nodes may have changed
+                    node = &tree.nodes[record.node_id]
+
                     # Compute right split node
                     rc = _add_split_node(splitter, tree, record.pos,
                                          record.end, record.impurity,
