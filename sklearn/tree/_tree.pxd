@@ -17,6 +17,7 @@ ctypedef np.npy_int32 INT32_t            # Signed 32 bit integer
 ctypedef np.npy_uint32 UINT32_t          # Unsigned 32 bit integer
 
 
+
 # =============================================================================
 # Criterion
 # =============================================================================
@@ -139,11 +140,11 @@ cdef class Tree:
     # since size determined at runtime.
     cdef public SIZE_t node_count        # Counter for node IDs
     cdef public SIZE_t capacity          # Capacity of tree, in terms of nodes
-    cdef object node_ndarray             # 1d struct array; owns data
-    cdef Node *nodes                     # duplicate pointer for fast internal use
-    cdef object value_ndarray            # (capacity, n_outputs, max_n_classes)
-    cdef double *value                   # duplicate pointer for fast internal use
+    cdef Node* nodes                     # Array of nodes
+    cdef double* value                   # (capacity, n_outputs, max_n_classes) array of values
     cdef SIZE_t value_stride             # = n_outputs * max_n_classes
+    cdef np.ndarray node_ndarray         # a numpy array viewing nodes for convenience
+    cdef np.ndarray value_ndarray        # a numpy array viewing nodes for convenience
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent,
@@ -155,9 +156,10 @@ cdef class Tree:
                                 SIZE_t n_node_samples) nogil
     cdef void _resize(self, SIZE_t capacity)
     cdef int _resize_c(self, SIZE_t capacity=*) nogil
+    cdef void _finalize(self)
 
-    cpdef predict(self, np.ndarray[DTYPE_t, ndim=2] X)
-    cpdef apply(self, np.ndarray[DTYPE_t, ndim=2] X)
+    cpdef np.ndarray predict(self, np.ndarray[DTYPE_t, ndim=2] X)
+    cpdef np.ndarray apply(self, np.ndarray[DTYPE_t, ndim=2] X)
     cpdef compute_feature_importances(self, normalize=*)
 
 

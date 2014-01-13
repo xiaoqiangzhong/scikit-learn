@@ -15,6 +15,7 @@
 from libc.stdlib cimport calloc, free, malloc, realloc
 from libc.string cimport memcpy, memset
 from libc.math cimport log as ln
+from cpython cimport Py_INCREF, PyObject
 
 from sklearn.tree._utils cimport Stack, StackRecord
 from sklearn.tree._utils cimport PriorityHeap, PriorityHeapRecord
@@ -23,6 +24,11 @@ import numpy as np
 cimport numpy as np
 np.import_array()
 
+
+cdef extern from "numpy/arrayobject.h":
+    object PyArray_NewFromDescr(object subtype, np.dtype descr,
+                                int nd, np.npy_intp* dims, np.npy_intp* strides,
+                                void* data, int flags, object obj)
 
 # =============================================================================
 # Types and constants
@@ -1680,7 +1686,7 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
         if rc == -1:
             raise MemoryError()
 
-        tree.splitter = None  # Release memory
+        tree._finalize()
 
 
 # Best first builder ----------------------------------------------------------
@@ -1870,7 +1876,7 @@ cdef class BestFirstTreeBuilder(TreeBuilder):
         if rc == -1:
             raise MemoryError()
 
-        tree.splitter = None  # Release memory
+        tree._finalize()
 
 
 # =============================================================================
@@ -2004,6 +2010,10 @@ cdef class Tree:
         """Destructor."""
         # Free all inner structures
         free(self.n_classes)
+        free(self.value)
+        free(self.nodes)
+        self.node_ndarray = None
+        self.value_ndarray = None
 
     def __reduce__(self):
         """Reduce re-implementation, for pickling."""
@@ -2033,20 +2043,30 @@ cdef class Tree:
             raise ValueError('You have loaded Tree version which '
                              'cannot be imported')
 
-        self.node_ndarray = d['nodes']
-        self.nodes = <Node *>(<np.ndarray> self.node_ndarray).data
-        self.value_ndarray = d['values']
-        self.value = <double *>(<np.ndarray> self.value_ndarray).data
-        self.capacity = self.node_ndarray.shape[0]
+        node_ndarray = d['nodes']
+        value_ndarray = d['values']
 
-        value_shape = (self.capacity, self.n_outputs, self.max_n_classes)
-        if (self.node_ndarray.ndim != 1
-         or self.node_ndarray.dtype != NODE_DTYPE
-         or not self.node_ndarray.flags.c_contiguous
-         or self.value_ndarray.shape != value_shape
-         or not self.value_ndarray.flags.c_contiguous
-         or self.value_ndarray.dtype != np.float64):
+        value_shape = (node_ndarray.shape[0], self.n_outputs, self.max_n_classes)
+        if (node_ndarray.ndim != 1
+         or node_ndarray.dtype != NODE_DTYPE
+         or not node_ndarray.flags.c_contiguous
+         or value_ndarray.shape != value_shape
+         or not value_ndarray.flags.c_contiguous
+         or value_ndarray.dtype != np.float64):
+            print [node_ndarray.ndim != 1
+                     , node_ndarray.dtype != NODE_DTYPE
+                     , not node_ndarray.flags.c_contiguous
+                     , value_ndarray.shape != value_shape
+                     , not value_ndarray.flags.c_contiguous
+                     , value_ndarray.dtype != np.float64]
+            print value_ndarray.shape, value_shape
             raise ValueError('Did not recognise loaded array layout')
+
+        self.capacity = node_ndarray.shape[0]
+        self._resize_c(self.capacity)
+        nodes = memcpy(self.nodes, (<np.ndarray> node_ndarray).data, self.capacity * sizeof(Node))
+        value = memcpy(self.value, (<np.ndarray> value_ndarray).data, self.capacity * self.value_stride * sizeof(double))
+        self._finalize()
 
     cdef void _resize(self, SIZE_t capacity):
         """Resize all inner arrays to `capacity`, if `capacity` == -1, then
@@ -2058,7 +2078,8 @@ cdef class Tree:
     # (i.e., older MSVC).
     cdef int _resize_c(self, SIZE_t capacity=<SIZE_t>(-1)) nogil:
         """Guts of _resize. Returns 0 for success, -1 for error."""
-        if capacity == self.capacity:
+
+        if capacity == self.capacity and self.nodes != NULL:
             return 0
 
         if capacity == <SIZE_t>(-1):
@@ -2067,28 +2088,25 @@ cdef class Tree:
             else:
                 capacity = 2 * self.capacity
 
-        self.capacity = capacity
-
-        with gil:
-            value_shape = (capacity, self.n_outputs, self.max_n_classes)
-            if self.node_ndarray is None:
-                # Initial setup
-                self.node_ndarray = np.empty(capacity, dtype=NODE_DTYPE)
-                self.value_ndarray = np.zeros(value_shape, dtype=np.float64,
-                                              order='C')
-            else:
-                # We only expect other references once building is complete
-                self.node_ndarray.resize(capacity, refcheck=False)
-                self.value_ndarray.resize(value_shape, refcheck=False)
-
-            # Typed MemoryViews are efficient to access
-            self.nodes = <Node *>(<np.ndarray> self.node_ndarray).data
-            self.value = <double *>(<np.ndarray> self.value_ndarray).data
+        if self.nodes == NULL:
+            self.nodes = <Node*> malloc(capacity * sizeof(Node))
+            self.value = <double*> calloc(capacity * self.value_stride, sizeof(double))
+        else:
+            self.nodes = <Node*> realloc(self.nodes, capacity * sizeof(Node))
+            self.value = <double*> realloc(self.value,
+                                           capacity * self.value_stride * sizeof(double))
+            if capacity > self.capacity:
+                # value memory is initialised to 0 to enable classifier argmax
+                memset((<void*> self.value) + self.capacity * self.value_stride * sizeof(double), 0,
+                       (capacity - self.capacity) * self.value_stride * sizeof(double))
+        if self.nodes == NULL or self.value == NULL:
+            return -1
 
         # if capacity smaller than node_count, adjust the counter
         if capacity < self.node_count:
             self.node_count = capacity
 
+        self.capacity = capacity
         return 0
 
     cdef SIZE_t _add_node(self, SIZE_t parent,
@@ -2135,20 +2153,20 @@ cdef class Tree:
 
         return node_id
 
-    cpdef predict(self, np.ndarray[DTYPE_t, ndim=2] X):
+    cpdef np.ndarray predict(self, np.ndarray[DTYPE_t, ndim=2] X):
         """Predict target for X."""
         out = self.value_ndarray.take(self.apply(X), axis=0, mode='clip')
         if self.n_outputs == 1:
             out = out.reshape(X.shape[0], self.max_n_classes)
         return out
 
-    cpdef apply(self, np.ndarray[DTYPE_t, ndim=2] X):
+    cpdef np.ndarray apply(self, np.ndarray[DTYPE_t, ndim=2] X):
         """Finds the terminal region (=leaf node) for each sample in X."""
         cdef SIZE_t n_samples = X.shape[0]
         cdef Node *node = NULL
         cdef SIZE_t i = 0
 
-        out_array = np.zeros((n_samples,), dtype=np.intp)
+        cdef np.ndarray[SIZE_t] out_array = np.zeros((n_samples,), dtype=np.intp)
         cdef SIZE_t[:] out = out_array
 
         with nogil:
@@ -2204,6 +2222,31 @@ cdef class Tree:
                 importances /= normalizer
 
         return importances
+
+    cdef void _finalize(self):
+        """Call after building or setstate complete"""
+        # after building, create ndarrays for convenience
+        cdef np.npy_intp shape[3]
+        shape[0] = <np.npy_intp> self.node_count
+        shape[1] = <np.npy_intp> self.n_outputs
+        shape[2] = <np.npy_intp> self.max_n_classes
+        cdef np.ndarray arr
+        arr = np.PyArray_SimpleNewFromData(3, shape, np.NPY_DOUBLE, self.value)
+        arr.base = <PyObject*> self
+        Py_INCREF(self)
+        self.value_ndarray = arr
+
+        cdef np.npy_intp strides[1]
+        strides[0] = sizeof(Node)
+        arr = PyArray_NewFromDescr(np.ndarray, <np.dtype> NODE_DTYPE, 1, shape,
+                                   strides, <void *> self.nodes,
+                                   np.NPY_DEFAULT, None)
+        arr.base = <PyObject*> self
+        Py_INCREF(self)
+        self.node_ndarray = arr
+
+        # release memory
+        self.splitter = None
 
 
 # =============================================================================
