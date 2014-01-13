@@ -2166,8 +2166,8 @@ cdef class Tree:
         cdef Node *node = NULL
         cdef SIZE_t i = 0
 
-        cdef np.ndarray[SIZE_t] out_array = np.zeros((n_samples,), dtype=np.intp)
-        cdef SIZE_t[:] out = out_array
+        cdef np.ndarray[SIZE_t] out = np.zeros((n_samples,), dtype=np.intp)
+        cdef SIZE_t* out_data = <SIZE_t*> out.data
 
         with nogil:
             for i in range(n_samples):
@@ -2181,9 +2181,9 @@ cdef class Tree:
                     else:
                         node = &self.nodes[node.right_child]
 
-                out[i] = <SIZE_t>(node - self.nodes)  # node offset
+                out_data[i] = <SIZE_t>(node - self.nodes)  # node offset
 
-        return out_array
+        return out
 
     cpdef compute_feature_importances(self, normalize=True):
         """Computes the importance of each feature (aka variable)."""

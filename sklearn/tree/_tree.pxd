@@ -6,7 +6,6 @@
 
 # See _tree.pyx for details.
 
-from cython.view cimport contiguous
 import numpy as np
 cimport numpy as np
 
