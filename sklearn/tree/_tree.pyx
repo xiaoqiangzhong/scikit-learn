@@ -2053,13 +2053,6 @@ cdef class Tree:
          or value_ndarray.shape != value_shape
          or not value_ndarray.flags.c_contiguous
          or value_ndarray.dtype != np.float64):
-            print [node_ndarray.ndim != 1
-                     , node_ndarray.dtype != NODE_DTYPE
-                     , not node_ndarray.flags.c_contiguous
-                     , value_ndarray.shape != value_shape
-                     , not value_ndarray.flags.c_contiguous
-                     , value_ndarray.dtype != np.float64]
-            print value_ndarray.shape, value_shape
             raise ValueError('Did not recognise loaded array layout')
 
         self.capacity = node_ndarray.shape[0]
