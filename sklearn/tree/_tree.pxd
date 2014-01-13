@@ -111,7 +111,10 @@ cdef class Splitter:
 # =============================================================================
 
 cdef struct Node:
-    # Does not store values at node, as shape is not known at compile time
+    # The main storage for Tree, excluding values at each node, which are
+    # stored separately as their size is not known at compile time.
+    # An array of each field is publicly accessible from Tree, and its
+    # semantics is documented there.
     SIZE_t left_child
     SIZE_t right_child
     SIZE_t feature

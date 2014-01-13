@@ -2081,19 +2081,20 @@ cdef class Tree:
             else:
                 capacity = 2 * self.capacity
 
-        if self.nodes == NULL:
-            self.nodes = <Node*> malloc(capacity * sizeof(Node))
-            self.value = <double*> calloc(capacity * self.value_stride, sizeof(double))
-        else:
-            self.nodes = <Node*> realloc(self.nodes, capacity * sizeof(Node))
-            self.value = <double*> realloc(self.value,
-                                           capacity * self.value_stride * sizeof(double))
-            if capacity > self.capacity:
-                # value memory is initialised to 0 to enable classifier argmax
-                memset((<void*> self.value) + self.capacity * self.value_stride * sizeof(double), 0,
-                       (capacity - self.capacity) * self.value_stride * sizeof(double))
-        if self.nodes == NULL or self.value == NULL:
+        cdef void* ptr = realloc(self.nodes, capacity * sizeof(Node))
+        if ptr == NULL:
             return -1
+        self.nodes = <Node*> ptr
+        ptr = realloc(self.value,
+                      capacity * self.value_stride * sizeof(double))
+        if ptr == NULL:
+            return -1
+        self.value = <double*> ptr
+
+        # value memory is initialised to 0 to enable classifier argmax
+        if capacity > self.capacity:
+            memset((<void*> self.value) + self.capacity * self.value_stride * sizeof(double), 0,
+                   (capacity - self.capacity) * self.value_stride * sizeof(double))
 
         # if capacity smaller than node_count, adjust the counter
         if capacity < self.node_count:
