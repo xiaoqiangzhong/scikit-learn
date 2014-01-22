@@ -376,7 +376,7 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
                 delayed(_fit_and_score)(
                     clone(base_estimator), X, y, self.scorer_, train, test,
                     self.verbose, parameters, self.fit_params,
-                    return_parameters=True)
+                    return_parameters=True, callback=getattr(self, 'callback', None))
                 for parameters in parameter_iterable
                 for train, test in cv)
 
@@ -386,33 +386,39 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
 
         scores = list()
         grid_scores = list()
+        grid_cb_results = []
         for grid_start in range(0, n_fits, n_folds):
             n_test_samples = 0
             score = 0
             all_scores = []
-            for this_score, this_n_test_samples, _, parameters in \
+            cb_results = []
+            for this_score, this_n_test_samples, _, parameters, cb_result in \
                     out[grid_start:grid_start + n_folds]:
                 all_scores.append(this_score)
                 if self.iid:
                     this_score *= this_n_test_samples
                     n_test_samples += this_n_test_samples
                 score += this_score
+                cb_results.append(cb_result)
             if self.iid:
                 score /= float(n_test_samples)
             else:
                 score /= float(n_folds)
             scores.append((score, parameters))
+            grid_cb_results.append(cb_results)
             # TODO: shall we also store the test_fold_sizes?
             grid_scores.append(_CVScoreTuple(
                 parameters,
                 score,
                 np.array(all_scores)))
+
         # Store the computed scores
         self.grid_scores_ = grid_scores
+        self.cb_results_ = grid_cb_results
 
         # Find the best parameters by comparing on the mean validation score:
         # note that `sorted` is deterministic in the way it breaks ties
-        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
+        best, self.best_index_ = sorted(zip(grid_scores, xrange(len(grid_scores))), key=lambda (x, i): x.mean_validation_score,
                       reverse=True)[0]
         self.best_params_ = best.parameters
         self.best_score_ = best.mean_validation_score

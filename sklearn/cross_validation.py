@@ -1100,7 +1100,7 @@ def cross_val_score(estimator, X, y=None, scoring=None, cv=None, n_jobs=1,
 
 
 def _fit_and_score(estimator, X, y, scorer, train, test, verbose, parameters,
-                   fit_params, return_train_score=False,
+                   fit_params, callback=None, return_train_score=False,
                    return_parameters=False):
     """Fit estimator and compute scores for a given dataset split.
 
@@ -1135,6 +1135,8 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose, parameters,
     fit_params : dict or None
         Parameters that will be passed to ``estimator.fit``.
 
+    callback : callable (estimator, X_train, y_train, X_test, y_test) -> object
+
     return_train_score : boolean, optional, default: False
         Compute and return score on training set.
 
@@ -1157,6 +1159,9 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose, parameters,
 
     parameters : dict or None, optional
         The parameters that have been evaluated.
+
+    callback_result : object, optional
+        The result of evaluating `callback`.
     """
     if verbose > 1:
         if parameters is None:
@@ -1200,6 +1205,8 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose, parameters,
     ret.extend([test_score, _num_samples(X_test), scoring_time])
     if return_parameters:
         ret.append(parameters)
+    if callable(callback):
+        ret.append(callback(estimator, X_train, y_train, X_test, y_test))
     return ret
 
 
