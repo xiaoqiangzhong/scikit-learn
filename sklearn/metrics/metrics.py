@@ -2230,14 +2230,14 @@ def label_ranking_average_precision_score(y_true, y_score):
 
         # Compute denominators
         unique_all, inverse = np.unique(y_score[i], return_inverse=True)
-        count = bincount(inverse, minlength=unique_all.size)
+        count = np.bincount(inverse, minlength=unique_all.size)
         cum_count = count[::-1].cumsum()[::-1]  # reverse cumsum
 
         # Compute numerators
         unique_relevant, relevant_inverse = np.unique(y_score[i, relevant],
                                                       return_inverse=True)
-        count_relevant = bincount(relevant_inverse,
-                                  minlength=unique_relevant.size)
+        count_relevant = np.bincount(relevant_inverse,
+                                     minlength=unique_relevant.size)
         cum_count_relevant = count_relevant[::-1].cumsum()[::-1]
 
         score += (cum_count_relevant[relevant_inverse] /
