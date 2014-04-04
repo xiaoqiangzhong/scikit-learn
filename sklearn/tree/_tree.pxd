@@ -103,9 +103,9 @@ cdef class Splitter:
     cdef SIZE_t y_stride
     cdef DOUBLE_t* sample_weight
 
-    cdef DTYPE_t* data
-    cdef SIZE_t* indices
-    cdef SIZE_t* indptr
+    cdef DTYPE_t* X_data
+    cdef SIZE_t* X_indices
+    cdef SIZE_t* X_indptr
 
     cdef np.ndarray _data
     cdef np.ndarray _indices
