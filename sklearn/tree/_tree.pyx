@@ -913,10 +913,6 @@ cdef class Splitter:
         self.n_features = 0
         self.feature_values = NULL
 
-        self.tmp_indices = NULL
-        self.index_to_color = NULL
-        self.index_to_samples = NULL
-
         self.X = NULL
         self.X_sample_stride = 0
         self.X_fx_stride = 0
@@ -934,7 +930,6 @@ cdef class Splitter:
 
         self.current_color = 0
         self.index_to_color = NULL
-        self.tmp_indices = NULL
         self.sorted_samples = NULL
         self.index_to_samples = NULL
 
@@ -1039,7 +1034,6 @@ cdef class BestSparseSplitter(Splitter):
     def __dealloc__(self):
         """Deallocate memory"""
         free(self.index_to_color)
-        free(self.tmp_indices)
         free(self.sorted_samples)
         free(self.index_to_samples)
 
@@ -1141,21 +1135,17 @@ cdef class BestSparseSplitter(Splitter):
         #These are tmp arrays used in node_split_sparse
         cdef SIZE_t* index_to_color = <SIZE_t*> realloc(self.index_to_color,
                                                  n_samples * sizeof(SIZE_t))
-        cdef SIZE_t* tmp_indices = <SIZE_t*> realloc(self.tmp_indices,
-                                                    n_samples * sizeof(SIZE_t))
         cdef SIZE_t* sorted_samples = <SIZE_t*> realloc(self.sorted_samples,
                                                     n_samples * sizeof(SIZE_t))
         cdef SIZE_t* index_to_samples = <SIZE_t*> realloc(self.index_to_samples,
                                                  n_samples * sizeof(SIZE_t))
 
-        if (tmp_indices == NULL or
-                sorted_samples == NULL or
+        if (sorted_samples == NULL or
                 index_to_samples == NULL or
                 index_to_color == NULL):
             raise MemoryError()
 
         self.sorted_samples = sorted_samples
-        self.tmp_indices = tmp_indices
         self.index_to_samples = index_to_samples
         self.index_to_color = index_to_color
 
@@ -1203,7 +1193,6 @@ cdef class BestSparseSplitter(Splitter):
         cdef SIZE_t n_features = self.n_features
 
         cdef DTYPE_t* Xf = self.feature_values
-        cdef SIZE_t* tmp_indices = self.tmp_indices
         cdef SIZE_t* sorted_samples = self.sorted_samples
         cdef SIZE_t* index_to_samples = self.index_to_samples
         cdef SIZE_t* index_to_color = self.index_to_color
@@ -1245,6 +1234,8 @@ cdef class BestSparseSplitter(Splitter):
         cdef SIZE_t const_nonzero_ftr = 0
         cdef SIZE_t const_ftr = 0
 
+
+        cdef SIZE_t index
 
         cdef bint is_samples_sorted = 0
         cdef SIZE_t n_samples = end - start
@@ -1352,103 +1343,95 @@ cdef class BestSparseSplitter(Splitter):
                                       sorted_samples[p], &k_, &start_indices)
 
                         if k_ != -1:
-                             # if k_ is not -1, then we are sure that the index
-                             # was found otherwise the index does not exist
-                             # meaning the corresponding data is 0.
-                             # Put positive values of the current feature
-                             # at the end of `Xf` and its negative values at
-                             # the beginning of it, and their corresponding
-                             # incides in `tmp_indices`
+                             # If k != -1, we have found a non zero value
 
                             if X_data[k_] > 0:
                                 start_positive -= 1
                                 Xf[start_positive] = X_data[k_]
-                                tmp_indices[start_positive] = X_indices[k_]
+
+                                index = index_to_samples[X_indices[k_]]
+
+                                tmp = samples[index]
+                                samples[index] = samples[start_positive]
+                                samples[start_positive] = tmp
+
+                                index_to_samples[samples[index]] = index
+                                index_to_samples[samples[start_positive]] = start_positive
+
 
                             elif X_data[k_] < 0:
                                 Xf[end_negative] = X_data[k_]
-                                tmp_indices[end_negative] = X_indices[k_]
+
+                                index = index_to_samples[X_indices[k_]]
+
+                                tmp = samples[index]
+                                samples[index] = samples[end_negative]
+                                samples[end_negative] = tmp
+
+                                index_to_samples[samples[index]] = index
+                                index_to_samples[samples[end_negative]] = end_negative
+
                                 end_negative += 1
-
-                            if const_nonzero_ftr == 1:
-                                if n_nonzero_values == 0:
-                                    prev_ftr = X_data[k_]
-                                elif prev_ftr != X_data[k_]:
-                                    const_nonzero_ftr = 0
-
-                            n_nonzero_values +=1
-
                         p += 1
+
+                # Using coloring technique to extract non zero values
                 else:
-                    # Using coloring technique : Put positive values of the
-                    # current feature at the end of `Xf` and its negative
-                    # values at the beginning of it, and their corresponding
-                    # incides in `tmp_indices`
                     for k_ in range(X_indptr[current_feature],
                                     X_indptr[current_feature + 1]):
+
                         if index_to_color[X_indices[k_]] == self.current_color:
                             if X_data[k_] > 0:
                                 start_positive -= 1
                                 Xf[start_positive] = X_data[k_]
-                                tmp_indices[start_positive] = X_indices[k_]
+
+                                index = index_to_samples[X_indices[k_]]
+
+                                tmp = samples[index]
+                                samples[index] = samples[start_positive]
+                                samples[start_positive] = tmp
+
+                                index_to_samples[samples[index]] = index
+                                index_to_samples[samples[start_positive]] = start_positive
+
 
                             elif X_data[k_] < 0:
                                 Xf[end_negative] = X_data[k_]
-                                tmp_indices[end_negative] = X_indices[k_]
+
+                                index = index_to_samples[X_indices[k_]]
+
+                                tmp = samples[index]
+                                samples[index] = samples[end_negative]
+                                samples[end_negative] = tmp
+
+                                index_to_samples[samples[index]] = index
+                                index_to_samples[samples[end_negative]] = end_negative
+
                                 end_negative += 1
 
-                            if const_nonzero_ftr == 1:
-                                if n_nonzero_values==0:
-                                    prev_ftr = X_data[k_]
-                                elif prev_ftr != X_data[k_]:
-                                    const_nonzero_ftr = 0
-                            n_nonzero_values +=1
-
-                    # TODO FIX this
-                    # if pos_index < neg_index - 1:
-                    #     with gil:
-                    #         raise AssertionError("The format of the sparse matrix is corrupted")
-                    # If the current feature is constant (all zeros or all non-zeros and
-                    # constant) then go to the next feature
+                # TODO FIX this
+                # if pos_index < neg_index - 1:
+                #     with gil:
+                #         raise AssertionError("The format of the sparse matrix is corrupted")
 
                 const_ftr = 0
                 if (n_nonzero_values == 0 or
                     (const_nonzero_ftr==1 and end - start == n_nonzero_values)):
                     const_ftr = 1
 
-                # Sort the positive and negative parts of `Xf` while rearranging
-                # their corresponding indices in `tmp_indices`
+                # Sort the positive and negative parts of `Xf`
                 if end_negative > start:
-                    sort(Xf + start, tmp_indices + start, end_negative - start)
+                    sort(Xf + start, samples + start, end_negative - start)
 
                 if start_positive < end:
-                    sort(Xf + start_positive, tmp_indices + start_positive,
+                    sort(Xf + start_positive, samples + start_positive,
                          end - start_positive)
 
-                # Make sure that the indices corresponding to the positive and
-                # negative parts of `tmp_indices` are the same as the corresponding
-                # indices in samples, if not reaarange `samples`. For example
-                # the index of the most negative number should be in samples[start]
-                # and the index of the most positive number in samples[end-1], if
-                # not samples are rearranged to make this happen.
-                for k_ in range(start, end_negative):
-                    p = index_to_samples[tmp_indices[k_]]
+                # Update index_to_samples to take into account the sort
+                for p in range(start, end_negative):
+                    index_to_samples[samples[p]] = p
 
-                    if p != k_:
-                        tmp = samples[k_]
-                        samples[k_] = samples[p]
-                        samples[p] = tmp
-                        index_to_samples[samples[k_]] = k_
-                        index_to_samples[samples[p]] =  p
-
-                for k_ in range(start_positive, end):
-                    p = index_to_samples[tmp_indices[k_]]
-                    if p != k_:
-                        tmp = samples[k_]
-                        samples[k_] = samples[p]
-                        samples[p] = tmp
-                        index_to_samples[samples[k_]] = k_
-                        index_to_samples[samples[p]] =  p
+                for p in range(start_positive, end):
+                    index_to_samples[samples[p]] = p
 
                 # Add a zero in Xf, if there is any zeros
                 if end_negative != start_positive:
@@ -1492,6 +1475,7 @@ cdef class BestSparseSplitter(Splitter):
                         p += 1
                         # (p >= end) or (X[samples[p], current_feature] >
                         #                X[samples[p - 1], current_feature])
+
 
                         if p < end:
                             current_pos = p
@@ -1566,7 +1550,6 @@ cdef class BestSparseSplitter(Splitter):
     def __dealloc__(self):
         """Destructor."""
         free(self.index_to_color)
-        free(self.tmp_indices)
         free(self.sorted_samples)
         free(self.index_to_samples)
 
