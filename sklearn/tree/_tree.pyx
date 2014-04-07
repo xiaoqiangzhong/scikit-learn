@@ -1206,7 +1206,6 @@ cdef class BestSparseSplitter(Splitter):
         cdef SIZE_t start = self.start
         cdef SIZE_t end = self.end
 
-
         cdef SIZE_t* X_indices = self.X_indices
         cdef SIZE_t* X_indptr = self.X_indptr
         cdef DTYPE_t* X_data = self.X_data
@@ -1348,10 +1347,18 @@ cdef class BestSparseSplitter(Splitter):
                         is_samples_sorted = 1
 
 
-                    p = start
                     start_indices = X_indptr[current_feature]
                     end_indices = X_indptr[current_feature + 1]
 
+                    while (start_indices < end_indices and
+                           sorted_samples[start] > X_indices[start_indices]):
+                        start_indices += 1
+
+                    while (start_indices < end_indices and
+                           sorted_samples[end - 1] < X_indices[end_indices - 1]):
+                        end_indices -= 1
+
+                    p = start
                     while (p < end and start_indices < end_indices):
                         # Find index of sorted_samples[p] in X_indices
                         binary_search(X_indices, start_indices, end_indices,
@@ -3268,17 +3275,6 @@ cdef void binary_search(SIZE_t* sorted_array, SIZE_t start, SIZE_t end,
     If not found, return -1. new_start is the last pivot + 1
     """
     cdef SIZE_t pivot
-
-    # Early stopping if not in range
-    if value < sorted_array[start]:
-        index[0] = -1
-        new_start[0] = start
-        return
-
-    if sorted_array[end - 1] < value:
-        index[0] = -1
-        new_start[0] = end + 1
-        return
 
     while start < end:
         pivot = (start + end) / 2
