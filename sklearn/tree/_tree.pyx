@@ -1229,23 +1229,14 @@ cdef class BestSparseSplitter(Splitter):
         cdef SIZE_t partition_end
 
         cdef SIZE_t k_
-        cdef SIZE_t n_nonzero_values = 0
-        cdef DTYPE_t prev_ftr = 0.0
-        cdef SIZE_t const_nonzero_ftr = 0
-        cdef SIZE_t const_ftr = 0
-
-
-        cdef SIZE_t index
-        cdef bint is_samples_sorted = 0
-        cdef SIZE_t n_samples = end - start
-        cdef SIZE_t n_indices
-        cdef SIZE_t start_indices = 0
-        cdef SIZE_t end_indices = 0
-
+        cdef SIZE_t p_next
+        cdef SIZE_t p_prev
+        cdef bint is_samples_sorted = 0  # indicate is sorted_samples is
+                                         # inititialized
         # We assume implicitely that end_positive = end and
         # start_negative = start
-        cdef SIZE_t start_positive = end
-        cdef SIZE_t end_negative = start
+        cdef SIZE_t start_positive
+        cdef SIZE_t end_negative
 
         # Marking samples that are in the current node (samples[start:end]) with
         # current_color, current_color is changed each time to avoid zeroing
@@ -1302,10 +1293,6 @@ cdef class BestSparseSplitter(Splitter):
 
                 current_feature = features[f_j]
 
-                n_nonzero_values = 0
-                prev_ftr = 0
-                const_nonzero_ftr = 1
-
                 extract_nnz(X_indices, X_data, X_indptr[current_feature],
                             X_indptr[current_feature + 1],
                             index_to_color, self.current_color,
@@ -1313,16 +1300,10 @@ cdef class BestSparseSplitter(Splitter):
                             &end_negative, &start_positive, sorted_samples,
                             &is_samples_sorted)
 
-
                 # TODO FIX this
                 # if pos_index < neg_index - 1:
                 #     with gil:
                 #         raise AssertionError("The format of the sparse matrix is corrupted")
-
-                const_ftr = 0
-                if (n_nonzero_values == 0 or
-                    (const_nonzero_ftr==1 and end - start == n_nonzero_values)):
-                    const_ftr = 1
 
                 # Sort the positive and negative parts of `Xf`
                 if end_negative > start:
@@ -1343,15 +1324,6 @@ cdef class BestSparseSplitter(Splitter):
                 if end_negative != start_positive:
                     Xf[end_negative] = 0.
                     end_negative += 1
-
-                # if n_nonzero_values != (end - start):
-                #     first_zero_p = neg_index
-                #     second_zero_p = pos_index
-                #     Xf[first_zero_p] = 0
-                #     Xf[second_zero_p] = 0
-                # else:
-                #     first_zero_p = -1
-                #     second_zero_p = -1
 
                 if Xf[end - 1] <= Xf[start] + FEATURE_THRESHOLD:
                     features[f_j] = features[n_total_constants]
@@ -3170,25 +3142,27 @@ cdef inline void binary_search(SIZE_t* sorted_array, SIZE_t start, SIZE_t end,
 
 cdef inline void  extra_nnz_color(SIZE_t* X_indices,
                                   DTYPE_t* X_data,
-                                  SIZE_t indices_start,
-                                  SIZE_t indices_end,
+                                  SIZE_t indptr_start,
+                                  SIZE_t indptr_end,
                                   SIZE_t* index_to_color,
                                   SIZE_t color,
                                   SIZE_t* samples,
+                                  SIZE_t start,
+                                  SIZE_t end,
                                   SIZE_t* index_to_samples,
                                   DTYPE_t* Xf,
                                   SIZE_t* end_negative,
                                   SIZE_t* start_positive) nogil:
-    """Perform intersection between X_indices[indices_start:indices_end]
+    """Perform intersection between X_indices[indptr_start:indptr_end]
     and samples[start:end] using a color approach which is
-    O(indices_end - indices_start).
+    O(indptr_end - indptr_start).
     """
     cdef SIZE_t k_
     cdef SIZE_t index
-    cdef SIZE_t end_negative_ = end_negative[0]
-    cdef SIZE_t start_positive_ = start_positive[0]
+    cdef SIZE_t end_negative_ = start
+    cdef SIZE_t start_positive_ = end
 
-    for k_ in range(indices_start, indices_end):
+    for k_ in range(indptr_start, indptr_end):
         if index_to_color[X_indices[k_]] == color:
             if X_data[k_] > 0:
                 start_positive_ -= 1
@@ -3225,8 +3199,8 @@ cdef inline void  extra_nnz_color(SIZE_t* X_indices,
 
 cdef inline void  extract_nnz_binary_search(SIZE_t* X_indices,
                                             DTYPE_t* X_data,
-                                            SIZE_t indices_start,
-                                            SIZE_t indices_end,
+                                            SIZE_t indptr_start,
+                                            SIZE_t indptr_end,
                                             SIZE_t* samples,
                                             SIZE_t start,
                                             SIZE_t end,
@@ -3236,7 +3210,7 @@ cdef inline void  extract_nnz_binary_search(SIZE_t* X_indices,
                                             SIZE_t* start_positive,
                                             SIZE_t* sorted_samples,
                                             bint* is_samples_sorted) nogil:
-    """Perform intersection between X_indices[indices_start:indices_end]
+    """Perform intersection between X_indices[indptr_start:indptr_end]
     and samples[start:end] using a binary search approach.
     """
     cdef SIZE_t n_samples
@@ -3249,24 +3223,24 @@ cdef inline void  extract_nnz_binary_search(SIZE_t* X_indices,
               compare_SIZE_t)
         is_samples_sorted[0] = 1
 
-    while (indices_start < indices_end and
-           sorted_samples[start] > X_indices[indices_start]):
-        indices_start += 1
+    while (indptr_start < indptr_end and
+           sorted_samples[start] > X_indices[indptr_start]):
+        indptr_start += 1
 
-    while (indices_start < indices_end and
-           sorted_samples[end - 1] < X_indices[indices_end - 1]):
-        indices_end -= 1
+    while (indptr_start < indptr_end and
+           sorted_samples[end - 1] < X_indices[indptr_end - 1]):
+        indptr_end -= 1
 
     cdef SIZE_t p = start
     cdef SIZE_t index
     cdef SIZE_t k_
-    cdef SIZE_t end_negative_ = end_negative[0]
-    cdef SIZE_t start_positive_ = start_positive[0]
+    cdef SIZE_t end_negative_ = start
+    cdef SIZE_t start_positive_ = end
 
-    while (p < end and indices_start < indices_end):
+    while (p < end and indptr_start < indptr_end):
         # Find index of sorted_samples[p] in X_indices
-        binary_search(X_indices, indices_start, indices_end,
-                      sorted_samples[p], &k_, &indices_start)
+        binary_search(X_indices, indptr_start, indptr_end,
+                      sorted_samples[p], &k_, &indptr_start)
 
         if k_ != -1:
              # If k != -1, we have found a non zero value
@@ -3307,8 +3281,8 @@ cdef inline void  extract_nnz_binary_search(SIZE_t* X_indices,
 
 cdef inline void  extract_nnz(SIZE_t* X_indices,
                               DTYPE_t* X_data,
-                              SIZE_t indices_start,
-                              SIZE_t indices_end,
+                              SIZE_t indptr_start,
+                              SIZE_t indptr_end,
                               SIZE_t* index_to_color,
                               SIZE_t color,
                               SIZE_t* samples,
@@ -3321,8 +3295,9 @@ cdef inline void  extract_nnz(SIZE_t* X_indices,
                               SIZE_t* sorted_samples,
                               bint* is_samples_sorted) nogil:
 
-    cdef SIZE_t n_indices = indices_end - indices_start
+    cdef SIZE_t n_indices = indptr_end - indptr_start
     cdef SIZE_t n_samples = end - start
+
 
     # Use binary search to if n_samples * log(n_indices) <
     # n_indices and coloring technique otherwise.
@@ -3330,8 +3305,7 @@ cdef inline void  extract_nnz(SIZE_t* X_indices,
     # search and O(n_indices) is the running time of coloring
     # technique.
     if n_samples * log(n_indices) < n_indices:
-        extract_nnz_binary_search(X_indices, X_data,
-                                  indices_start, indices_end,
+        extract_nnz_binary_search(X_indices, X_data, indptr_start, indptr_end,
                                   samples, start, end, index_to_samples,
                                   Xf, end_negative, start_positive,
                                   sorted_samples, is_samples_sorted)
@@ -3339,8 +3313,7 @@ cdef inline void  extract_nnz(SIZE_t* X_indices,
 
     # Using coloring technique to extract non zero values
     else:
-        extra_nnz_color(X_indices, X_data,
-                        indices_start, indices_end,
+        extra_nnz_color(X_indices, X_data, indptr_start, indptr_end,
                         index_to_color, color,
-                        samples, index_to_samples, Xf,
-                        end_negative, start_positive)
+                        samples, start, end, index_to_samples,
+                        Xf, end_negative, start_positive)
