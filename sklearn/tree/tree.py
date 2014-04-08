@@ -47,18 +47,12 @@ DOUBLE = _tree.DOUBLE
 
 CRITERIA_CLF = {"gini": _tree.Gini, "entropy": _tree.Entropy}
 CRITERIA_REG = {"mse": _tree.MSE, "friedman_mse": _tree.FriedmanMSE}
-<<<<<<< HEAD
-SPLITTERS = {"best": _tree.BestSplitter,
-             "presort-best": _tree.PresortBestSplitter,
-             "random": _tree.RandomSplitter,
-             "best-sparse": _tree.BestSparseSplitter}
-=======
+
 DENSE_SPLITTERS = {"best": _tree.BestSplitter,
                    "presort-best": _tree.PresortBestSplitter,
                    "random": _tree.RandomSplitter}
 
 SPARSE_SPLITTER = {"best": _tree.BestSparseSplitter}
->>>>>>> ENH improve input checking
 
 # =============================================================================
 # Base decision tree
@@ -156,16 +150,13 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
                 if not X.has_sorted_indices:
                     X = X.sort_indices()
 
-                if (getattr(X.data, "dtype", None) != DTYPE or
-                        not X.data.flags.contiguous):
+                if getattr(X.data, "dtype", None) != DTYPE:
                     X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
 
-                if (getattr(X.indices, "dtype", None) != np.intp or
-                        not X.indices.flags.contiguous):
+                if getattr(X.indices, "dtype", None) != np.intp:
                     X.indices = np.ascontiguousarray(X.indices, dtype=np.intp)
 
-                if (getattr(X.indptr, "dtype", None) != np.intp or
-                        not X.indptr.flags.contiguous):
+                if getattr(X.indptr, "dtype", None) != np.intp:
                     X.indptr = np.ascontiguousarray(X.indptr, dtype=np.intp)
 
             else:
@@ -327,9 +318,24 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
         if issparse(X):
             if not isinstance(X, csr_matrix):
                 X = csr_matrix(X)
+<<<<<<< HEAD
         else:
             if getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
                 X = array2d(X, dtype=DTYPE)
+=======
+
+            if getattr(X.data, "dtype", None) != DTYPE:
+                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
+
+            if getattr(X.indices, "dtype", None) != np.intp:
+                X.indices = np.ascontiguousarray(X.indices, dtype=np.intp)
+
+            if getattr(X.indptr, "dtype", None) != np.intp:
+                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.intp)
+
+        elif getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
+            X = array2d(X, dtype=DTYPE)
+>>>>>>> ENH simplify interface for prediction
 
         n_samples, n_features = X.shape
 
@@ -342,11 +348,8 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
                              " input n_features is %s "
                              % (self.n_features_, n_features))
 
-        if issparse(X):
-            proba = self.tree_.predict_sparse(X.data, X.indices, X.indptr,
-                                              n_samples)
-        else:
-            proba = self.tree_.predict(X)
+
+        proba = self.tree_.predict(X)
 
         # Classification
         if isinstance(self, ClassifierMixin):
@@ -551,9 +554,19 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
         if issparse(X):
             if not isinstance(X, csr_matrix):
                 X = csr_matrix(X)
-        else:
-            if getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
-                X = array2d(X, dtype=DTYPE)
+
+            if getattr(X.data, "dtype", None) != DTYPE:
+                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
+
+            if getattr(X.indices, "dtype", None) != np.intp:
+                X.indices = np.ascontiguousarray(X.indices, dtype=np.intp)
+
+            if getattr(X.indptr, "dtype", None) != np.intp:
+                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.intp)
+
+        elif getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
+            X = array2d(X, dtype=DTYPE)
+
         n_samples, n_features = X.shape
 
         if self.tree_ is None:
@@ -565,11 +578,7 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
                              " input n_features is %s "
                              % (self.n_features_, n_features))
 
-        if issparse(X):
-            proba = self.tree_.predict_sparse(X.data, X.indices, X.indptr,
-                                              n_samples)
-        else:
-            proba = self.tree_.predict(X)
+        proba = self.tree_.predict(X)
 
         if self.n_outputs_ == 1:
             proba = proba[:, :self.n_classes_]
