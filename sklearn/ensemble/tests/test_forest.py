@@ -494,52 +494,92 @@ def test_max_leaf_nodes_max_depth():
         yield check_max_leaf_nodes_max_depth, name, X, y
 
 
-def test_memory_layout():
+def check_sparse_input(name, X, X_sparse, y):
+    ForestEstimator = FOREST_ESTIMATORS
+    dense = ForestEstimator(random_state=0, max_depth=2).fit(X, y)
+    sparse = ForestEstimator(random_state=0, max_depth=2).fit(X_sparse, y)
+
+    assert_array_almost_equal(sparse.apply(X), dense.apply(X))
+
+    if name in FOREST_CLASSIFIERS or name in FOREST_REGRESSORS:
+        assert_array_almost_equal(sparse.predict(X), dense.predict(X))
+        assert_array_almost_equal(sparse.feature_importances_,
+                                  dense.feature_importances_)
+
+    if name in FOREST_CLASSIFIERS:
+        assert_array_almost_equal(sparse.predict_proba(X),
+                                  dense.predict_proba(X))
+        assert_array_almost_equal(sparse.predict_log_proba(X),
+                                  dense.predict_log_proba(X))
+
+    if name in FOREST_TRANSFORMERS:
+        assert_array_almost_equal(sparse.transform(X),
+                                  dense.transform(X))
+        assert_array_almost_equal(sparse.fit_transform(X),
+                                  dense.fit_transform(X))
+
+
+def test_sparse_input():
+    rng = np.random.RandomState(0)
+    X = rng.rand(40, 10)
+    X[X < .8] = 0
+    y = (4 * rng.rand(40)).astype(np.int)
+
+
+    for name, sparse_matrix in product(FOREST_ESTIMATORS,
+                                       (csr_matrix, csc_matrix)):
+        yield name, X, sparse_matrix(X), y
+
+
+def check_memory_layout(name, dtype):
     """Check that it works no matter the memory layout"""
-    all_forests = [RandomForestClassifier,
-                   RandomForestRegressor,
-                   ExtraTreesClassifier,
-                   ExtraTreesRegressor]
 
-    for ForestEstimator, dtype in product(all_forests,
-                                          [np.float64, np.float32]):
-        est = ForestEstimator(random_state=0, bootstrap=False)
+    est = FOREST_ESTIMATORS[name](random_state=0, bootstrap=False)
 
-        # Nothing
-        X = np.asarray(iris.data, dtype=dtype)
+    # Nothing
+    X = np.asarray(iris.data, dtype=dtype)
+    y = iris.target
+    assert_array_equal(est.fit(X, y).predict(X), y)
+
+    # C-order
+    X = np.asarray(iris.data, order="C", dtype=dtype)
+    y = iris.target
+    assert_array_equal(est.fit(X, y).predict(X), y)
+
+    # F-order
+    X = np.asarray(iris.data, order="F", dtype=dtype)
+    y = iris.target
+    assert_array_equal(est.fit(X, y).predict(X), y)
+
+    # Contiguous
+    X = np.ascontiguousarray(iris.data, dtype=dtype)
+    y = iris.target
+    assert_array_equal(est.fit(X, y).predict(X), y)
+
+    if est.base_estimator.splitter in SPARSE_SPLITTER:
+        # csr matrix
+        X = csr_matrix(iris.data, dtype=dtype)
         y = iris.target
         assert_array_equal(est.fit(X, y).predict(X), y)
 
-        # C-order
-        X = np.asarray(iris.data, order="C", dtype=dtype)
+        # csc_matrix
+        X = csc_matrix(iris.data, dtype=dtype)
         y = iris.target
         assert_array_equal(est.fit(X, y).predict(X), y)
 
-        # F-order
-        X = np.asarray(iris.data, order="F", dtype=dtype)
-        y = iris.target
-        assert_array_equal(est.fit(X, y).predict(X), y)
+    # Strided
+    X = np.asarray(iris.data[::3], dtype=dtype)
+    y = iris.target[::3]
+    assert_array_equal(est.fit(X, y).predict(X), y)
 
-        # Contiguous
-        X = np.ascontiguousarray(iris.data, dtype=dtype)
-        y = iris.target
-        assert_array_equal(est.fit(X, y).predict(X), y)
 
-        if est.base_estimator.splitter in SPARSE_SPLITTER:
-            # csr matrix
-            X = csr_matrix(iris.data)
-            y = iris.target
-            assert_array_equal(est.fit(X, y).predict(X), y)
+def test_memory_layout():
+    for name, dtype in product(FOREST_CLASSIFIERS, [np.float64, np.float32]):
+        yield check_memory_layout, name, dtype
 
-            # csc_matrix
-            X = csc_matrix(iris.data)
-            y = iris.target
-            assert_array_equal(est.fit(X, y).predict(X), y)
+    for name, dtype in product(FOREST_REGRESSORS, [np.float64, np.float32]):
+        yield check_memory_layout, name, dtype
 
-        # Strided
-        X = np.asarray(iris.data[::3], dtype=dtype)
-        y = iris.target[::3]
-        assert_array_equal(est.fit(X, y).predict(X), y)
 
 
 if __name__ == "__main__":

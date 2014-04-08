@@ -828,15 +828,8 @@ def test_memoryerror():
     from sklearn.tree._tree import _realloc_test
     assert_raises(MemoryError, _realloc_test)
 
-<<<<<<< HEAD
 
-def test_classification_X_small():
-    s = DecisionTreeClassifier(random_state=0).\
-        fit(csc_matrix(X_small), y_small).tree_
-    d = DecisionTreeClassifier(random_state=0).fit(X_small, y_small).tree_
-
-
-def test_classification_X_small():
+def test_sparse_input_on_X_small():
     s = DecisionTreeClassifier(max_features=1,
                                random_state=1).fit(csc_matrix(X_small),
                                                    y_small).tree_
@@ -844,31 +837,21 @@ def test_classification_X_small():
                                random_state=1).fit(X_small,
                                                    y_small).tree_
     assert_tree_equal(d, s, "X_small dense and sparse not equal")
-=======
-    for max_features in [1, None]:
-        s = DecisionTreeClassifier(random_state=0, max_features=max_features)
-        s.fit(csc_matrix(X_small), y_small)
-
-        d = DecisionTreeClassifier(random_state=0, max_features=max_features)
-        d.fit(X_small, y_small)
-
-        assert_tree_equal(d.tree_, s.tree_,
-                          "dense and sparse format gave different trees")
-        assert_array_almost_equal(s.predict(X_small), d.predict(X_small))
->>>>>>> Prune testing of sparse input
 
 
-def test_regression__X_small():
-    for max_features in [1, None]:
-        s = DecisionTreeRegressor(random_state=0, max_features=max_features)
-        s.fit(csc_matrix(X_small), y_small)
+def test_sparse_input_on_random_data():
+    rng = np.random.RandomState(0)
+    X = rng.rand(40, 10)
+    X[X < .8] = 0
+    X = csr_matrix(X)
+    y = (4 * rng.rand(40)).astype(np.int)
 
-        d = DecisionTreeRegressor(random_state=0, max_features=max_features)
-        d.fit(X_small, y_small)
+    s = DecisionTreeRegressor(random_state=0).fit(X, y)
+    d = DecisionTreeRegressor(random_state=0).fit(X.toarray(), y)
 
-        assert_tree_equal(d.tree_, s.tree_,
-                          "dense and sparse format gave different trees")
-        assert_array_almost_equal(s.predict(X_small), d.predict(X_small))
+    assert_tree_equal(d.tree_, s.tree_,
+                      "dense and sparse format gave different trees")
+    assert_array_almost_equal(s.predict(X), d.predict(X))
 
 
 def test_sparse_input_boston():
@@ -897,8 +880,6 @@ def test_sparse_input_boston():
                                   d.predict(boston.data))
 
 def test_sparse_input_digits():
-    X
-
     for max_leaf_nodes in [None, 10, 20]:
         d = DecisionTreeClassifier(random_state=0,
                                    max_leaf_nodes=max_leaf_nodes)
