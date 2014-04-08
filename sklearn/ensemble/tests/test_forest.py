@@ -13,6 +13,8 @@ from collections import defaultdict
 from itertools import product
 
 import numpy as np
+from scipy.sparse import csr_matrix, csc_matrix
+
 from sklearn.utils.testing import assert_almost_equal
 from sklearn.utils.testing import assert_array_almost_equal
 from sklearn.utils.testing import assert_array_equal
@@ -30,6 +32,8 @@ from sklearn.ensemble import RandomTreesEmbedding
 from sklearn.grid_search import GridSearchCV
 from sklearn.svm import LinearSVC
 from sklearn.utils.validation import check_random_state
+
+from sklearn.tree.tree import SPARSE_SPLITTER
 
 # toy sample
 X = [[-2, -1], [-1, -1], [-1, -2], [1, 1], [1, 2], [2, 1]]
@@ -488,6 +492,54 @@ def test_max_leaf_nodes_max_depth():
     X, y = datasets.make_hastie_10_2(n_samples=100, random_state=1)
     for name in FOREST_ESTIMATORS:
         yield check_max_leaf_nodes_max_depth, name, X, y
+
+
+def test_memory_layout():
+    """Check that it works no matter the memory layout"""
+    all_forests = [RandomForestClassifier,
+                   RandomForestRegressor,
+                   ExtraTreesClassifier,
+                   ExtraTreesRegressor]
+
+    for ForestEstimator, dtype in product(all_forests,
+                                          [np.float64, np.float32]):
+        est = ForestEstimator(random_state=0, bootstrap=False)
+
+        # Nothing
+        X = np.asarray(iris.data, dtype=dtype)
+        y = iris.target
+        assert_array_equal(est.fit(X, y).predict(X), y)
+
+        # C-order
+        X = np.asarray(iris.data, order="C", dtype=dtype)
+        y = iris.target
+        assert_array_equal(est.fit(X, y).predict(X), y)
+
+        # F-order
+        X = np.asarray(iris.data, order="F", dtype=dtype)
+        y = iris.target
+        assert_array_equal(est.fit(X, y).predict(X), y)
+
+        # Contiguous
+        X = np.ascontiguousarray(iris.data, dtype=dtype)
+        y = iris.target
+        assert_array_equal(est.fit(X, y).predict(X), y)
+
+        if est.base_estimator.splitter in SPARSE_SPLITTER:
+            # csr matrix
+            X = csr_matrix(iris.data)
+            y = iris.target
+            assert_array_equal(est.fit(X, y).predict(X), y)
+
+            # csc_matrix
+            X = csc_matrix(iris.data)
+            y = iris.target
+            assert_array_equal(est.fit(X, y).predict(X), y)
+
+        # Strided
+        X = np.asarray(iris.data[::3], dtype=dtype)
+        y = iris.target[::3]
+        assert_array_equal(est.fit(X, y).predict(X), y)
 
 
 if __name__ == "__main__":
