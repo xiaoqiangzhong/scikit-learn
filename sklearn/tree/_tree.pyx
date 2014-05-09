@@ -14,6 +14,7 @@
 # Licence: BSD 3 clause
 
 from libc.stdlib cimport calloc, free, malloc, realloc, qsort
+
 from libc.string cimport memcpy, memset
 from libc.math cimport log as ln
 from cpython cimport Py_INCREF, PyObject
@@ -1592,6 +1593,7 @@ cdef class RandomSparseSplitter(SparseSplitter):
 
                     else:
                         current_pos = start_positive
+
 
                     # Reject if min_samples_leaf is not guaranteed
                     if (((current_pos - start) < min_samples_leaf) or
