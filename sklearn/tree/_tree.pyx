@@ -13,7 +13,7 @@
 #
 # Licence: BSD 3 clause
 
-from libc.stdlib cimport calloc, free, malloc, realloc, qsort
+from libc.stdlib cimport calloc, free, realloc, qsort
 
 from libc.string cimport memcpy, memset
 from libc.math cimport log as ln
@@ -1100,28 +1100,16 @@ cdef class SparseSplitter(Splitter):
         self.n_total_samples = n_total_samples
 
         # Initialize auxiliary array used to perform split
-        cdef SIZE_t* index_to_samples
-        cdef SIZE_t* sorted_samples
+        safe_realloc(&self.index_to_samples, n_total_samples * sizeof(SIZE_t))
+        safe_realloc(&self.sorted_samples, n_samples * sizeof(SIZE_t))
 
-        index_to_samples = <SIZE_t*> realloc(self.index_to_samples,
-                                             n_total_samples * sizeof(SIZE_t))
-        sorted_samples = <SIZE_t*> realloc(self.sorted_samples,
-                                           n_samples * sizeof(SIZE_t))
-
-        if (index_to_samples == NULL or
-                sorted_samples == NULL):
-            raise MemoryError()
-
+        cdef SIZE_t* index_to_samples = self.index_to_samples
         cdef SIZE_t p
-
         for p in range(n_total_samples):
             index_to_samples[p] = -1
 
         for p in range(n_samples):
             index_to_samples[samples[p]] = p
-
-        self.index_to_samples = index_to_samples
-        self.sorted_samples = sorted_samples
 
 
 cdef class BestSparseSplitter(SparseSplitter):
@@ -3204,15 +3192,16 @@ cdef class Tree:
         cdef Node* node = NULL
 
         cdef DTYPE_t* X_sample = NULL
-        cdef DTYPE_t* feature_to_sample = NULL
+        cdef SIZE_t* feature_to_sample = NULL
 
         cdef SIZE_t i = 0
         cdef INT32_t k = 0
 
+        safe_realloc(&X_sample, n_features * sizeof(DTYPE_t))
+        safe_realloc(&feature_to_sample, n_features * sizeof(SIZE_t))
+
         with nogil:
-            X_sample = <DTYPE_t*> malloc(n_features * sizeof(DTYPE_t))
-            feature_to_sample = <DTYPE_t*> malloc(n_features * sizeof(DTYPE_t))
-            memset(feature_to_sample, -1, n_features * sizeof(DTYPE_t))
+            memset(feature_to_sample, -1, n_features * sizeof(SIZE_t))
 
             for i in range(n_samples):
                 node = self.nodes
