@@ -378,12 +378,13 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
         predictions = []
 
         for k in xrange(self.n_outputs_):
-            predictions.append(np.zeros((n_samples,
-                                         n_classes_[k])))
+            predictions.append(np.zeros((n_samples, n_classes_[k])))
 
+        sample_indices = np.arange(n_samples)
         for estimator in self.estimators_:
             mask = np.ones((n_samples, ), dtype=np.bool)
             mask[estimator.indices_] = False
+            mask = sample_indices[mask]
             p_estimator = estimator.predict_proba(X[mask, :])
 
             if self.n_outputs_ == 1:
@@ -626,9 +627,11 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
         predictions = np.zeros((n_samples, self.n_outputs_))
         n_predictions = np.zeros((n_samples, self.n_outputs_))
 
+        sample_indices = np.arange(n_samples)
         for estimator in self.estimators_:
             mask = np.ones((n_samples, ), dtype=np.bool)
             mask[estimator.indices_] = False
+            mask = sample_indices[mask]
             p_estimator = estimator.predict(X[mask, :])
 
             if self.n_outputs_ == 1:
