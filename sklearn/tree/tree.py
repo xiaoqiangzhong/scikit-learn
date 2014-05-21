@@ -13,17 +13,19 @@ randomized trees. Single and multi-output problems are both handled.
 
 from __future__ import division
 
-from scipy.sparse import csc_matrix, issparse, csr_matrix
+
 import numbers
-import numpy as np
 from abc import ABCMeta, abstractmethod
 from warnings import warn
+
+import numpy as np
+from scipy.sparse import issparse
 
 from ..base import BaseEstimator, ClassifierMixin, RegressorMixin
 from ..externals import six
 from ..externals.six.moves import xrange
 from ..feature_selection.from_model import _LearntSelectorMixin
-from ..utils import array2d, check_random_state
+from ..utils.validation import check_random_state
 from ..utils.validation import check_arrays
 
 from ._tree import Criterion
@@ -139,24 +141,14 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
                  "and will be removed in 0.16.", DeprecationWarning)
 
         # Convert X to the proper type
-        X_old_data = None
-
         if check_input:
             if issparse(X):
-                X = X.tocsc()
-                X_old_data = X.data
+                X, = check_arrays(X, dtype=DTYPE, sparse_format='csc')
+                X.sort_indices()
 
-                if not X.has_sorted_indices:
-                    X = X.sort_indices()
-
-                if X.data.dtype != DTYPE:
-                    X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
-
-                if X.indices.dtype != np.int32:
-                    X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-                if X.indptr.dtype != np.int32:
-                    X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
+                if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                    raise ValueError("64 bit index based sparse matrix are "
+                                     "not supported")
 
             else:
                 X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
@@ -294,9 +286,6 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
             self.n_classes_ = self.n_classes_[0]
             self.classes_ = self.classes_[0]
 
-        if X_old_data is not None:
-            X.data = X_old_data
-
         return self
 
     def predict(self, X):
@@ -317,24 +306,13 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
         y : array of shape = [n_samples] or [n_samples, n_outputs]
             The predicted classes, or the predict values.
         """
-        X_old_data = None  # This variable is used to avoid inplace
-                           # of the data.
-
         if issparse(X):
-            X = X.tocsr()
-            X_old_data = X.data
-
-            if X.data.dtype != DTYPE:
-                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
-
-            if X.indices.dtype != np.int32:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-            if X.indptr.dtype != np.int32:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
-
-        elif getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
-            X = array2d(X, dtype=DTYPE)
+            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
+            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                raise ValueError("64 bit index based sparse matrix are "
+                                 "not supported")
+        else:
+            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
         n_samples, n_features = X.shape
 
@@ -349,10 +327,6 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
 
 
         proba = self.tree_.predict(X)
-
-        # Revert previous X.data
-        if X_old_data is not None:
-            X.data = X_old_data
 
         # Classification
         if isinstance(self, ClassifierMixin):
@@ -554,23 +528,15 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
             The class probabilities of the input samples. The order of the
             classes corresponds to that in the attribute `classes_`.
         """
-        X_old_data = None
-
         if issparse(X):
-            X = X.tocsr()
-            X_old_data = X.data
+            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
 
-            if X.data.dtype != DTYPE:
-                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
+            if (X.indices.dtype != np.int32 or X.indptr.dtype != np.int32):
+                raise ValueError("No support for int64 index based sparse "
+                                 "matrix ")
 
-            if X.indices.dtype != np.int32:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-            if X.indptr.dtype != np.int32:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
-
-        elif getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
-            X = array2d(X, dtype=DTYPE)
+        else:
+            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
         n_samples, n_features = X.shape
 
@@ -584,9 +550,6 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
                              % (self.n_features_, n_features))
 
         proba = self.tree_.predict(X)
-
-        if X_old_data is not None:
-            X.data = X_old_data
 
         if self.n_outputs_ == 1:
             proba = proba[:, :self.n_classes_]

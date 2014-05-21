@@ -34,15 +34,17 @@ Single and multi-output problems are both handled.
 
 # Authors: Gilles Louppe <g.louppe@gmail.com>
 #          Brian Holt <bdholt1@gmail.com>
+#          Joly Arnaud <arnaud.v.joly@gmail.com>
 # License: BSD 3 clause
 
 from __future__ import division
 
 import itertools
-import numpy as np
-from scipy.sparse import issparse, csr_matrix, csc_matrix
 from warnings import warn
 from abc import ABCMeta, abstractmethod
+
+import numpy as np
+from scipy.sparse import issparse
 
 from ..base import ClassifierMixin, RegressorMixin
 from ..externals.joblib import Parallel, delayed
@@ -56,7 +58,6 @@ from ..tree import (DecisionTreeClassifier, DecisionTreeRegressor,
 from ..tree._tree import DTYPE, DOUBLE
 from ..utils import array2d, check_random_state, check_arrays, safe_asarray
 from ..utils.validation import DataConversionWarning
-from scipy.sparse import issparse
 from .base import BaseEnsemble, _partition_estimators
 
 __all__ = ["RandomForestClassifier",
@@ -189,30 +190,20 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
             For each datapoint x in X and for each tree in the forest,
             return the index of the leaf x ends up in.
         """
-        X_old_data = None
-
         if issparse(X):
-            X.tocsr()
-            X_old_data = X.data
+            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
 
-            if getattr(X.data, "dtype", None) != DTYPE:
-                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
+            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                raise ValueError("64 bit index based sparse matrix are not "
+                                 "supported")
 
-            if getattr(X.indices, "dtype", None) != np.intp:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.intp)
+        else:
+            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
-            if getattr(X.indptr, "dtype", None) != np.intp:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.intp)
-
-        elif getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
-            X = array2d(X, dtype=DTYPE)
 
         results = Parallel(n_jobs=self.n_jobs, verbose=self.verbose,
                            backend="threading")(
             delayed(_parallel_apply)(tree, X) for tree in self.estimators_)
-
-        if X_old_data is not None:
-            X_old_data = X.data
 
         return np.array(results).T
 
@@ -243,23 +234,13 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
         random_state = check_random_state(self.random_state)
 
         # Convert data
-        X_old_data = None
-
         if issparse(X):
-            X = X.tocsc()
-            X_old_data = X.data
+            X, = check_arrays(X, dtype=DTYPE, sparse_format='csc')
+            X.sort_indices()
 
-            if not X.has_sorted_indices:
-                X = X.sort_indices()
-
-            if X.data.dtype != DTYPE:
-                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
-
-            if X.indices.dtype != np.int32:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-            if X.indptr.dtype != np.int32:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
+            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                raise ValueError("64 bit index based sparse matrix are not "
+                                 "supported")
 
         else:
             X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
@@ -329,10 +310,6 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
         if hasattr(self, "classes_") and self.n_outputs_ == 1:
             self.n_classes_ = self.n_classes_[0]
             self.classes_ = self.classes_[0]
-
-        # Revert previous X.data
-        if X_old_data is not None:
-            X.data = X_old_data
 
         return self
 
@@ -461,16 +438,13 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
         y : array of shape = [n_samples] or [n_samples, n_outputs]
             The predicted classes.
         """
-        if issparse(X):
-            n_samples = X.shape[0]
-        else:
-            n_samples = len(X)
         proba = self.predict_proba(X)
 
         if self.n_outputs_ == 1:
             return self.classes_.take(np.argmax(proba, axis=1), axis=0)
 
         else:
+            n_samples = proba[0].shape[0]
             predictions = np.zeros((n_samples, self.n_outputs_))
 
             for k in xrange(self.n_outputs_):
@@ -499,22 +473,15 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
             classes corresponds to that in the attribute `classes_`.
         """
         # Check data
-        X_old_data = None
         if issparse(X):
-            X = X.tocsr()
-            X_old_data = X.data
+            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
 
-            if X.data.dtype != DTYPE:
-                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
+            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                raise ValueError("64 bit index based sparse matrix are not "
+                                 "supported")
 
-            if X.indices.dtype != np.int32:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-            if X.indptr.dtype != np.int32:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
-
-        elif getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
-            X = array2d(X, dtype=DTYPE)
+        else:
+            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
         # Assign chunk of trees to jobs
         n_jobs, n_trees, starts = _partition_estimators(self)
@@ -545,10 +512,6 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
 
             for k in xrange(self.n_outputs_):
                 proba[k] /= self.n_estimators
-
-        # Revert previous X.data
-        if X_old_data is not None:
-            X.data = X_old_data
 
         return proba
 
@@ -627,23 +590,14 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
             The predicted values.
         """
         # Check data
-        X_old_data = None
-
         if issparse(X):
-            X = X.tocsr()
-            X_old_data = X.data
+            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
 
-            if X.data.dtype != DTYPE:
-                X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
-
-            if X.indices.dtype != np.int32:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-            if X.indptr.dtype != np.int32:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
-
-        elif getattr(X, "dtype", None) != DTYPE or X.ndim != 2:
-            X = array2d(X, dtype=DTYPE)
+            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                raise ValueError("64 bit index based sparse matrix are not "
+                                 "supported")
+        else:
+            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
         # Assign chunk of trees to jobs
         n_jobs, n_trees, starts = _partition_estimators(self)
@@ -657,10 +611,6 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
 
         # Reduce
         y_hat = sum(all_y_hat) / len(self.estimators_)
-
-        # Revert previous X.data
-        if X_old_data is not None:
-            X.data = X_old_data
 
         return y_hat
 

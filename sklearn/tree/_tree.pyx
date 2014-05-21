@@ -2499,18 +2499,14 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
         # check if dtype is correct
         if issparse(X):
             X = X.tocsc()
-
-            if not X.has_sorted_indices:
-                X = X.sort_indices()
+            X.sort_indices()
 
             if X.data.dtype != DTYPE:
                 X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
 
-            if X.indices.dtype != np.int32:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-            if X.indptr.dtype != np.int32:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
+            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                raise ValueError("64 bit index based sparse matrix are not "
+                                 "supported")
 
         elif X.dtype != DTYPE:
             # since we have to copy we will make it fortran for efficiency
@@ -2681,18 +2677,14 @@ cdef class BestFirstTreeBuilder(TreeBuilder):
         # check if dtype is correct
         if issparse(X):
             X = X.tocsc()
-
-            if not X.has_sorted_indices:
-                X = X.sort_indices()
+            X.sort_indices()
 
             if X.data.dtype != DTYPE:
                 X.data = np.ascontiguousarray(X.data, dtype=DTYPE)
 
-            if X.indices.dtype != np.int32:
-                X.indices = np.ascontiguousarray(X.indices, dtype=np.int32)
-
-            if X.indptr.dtype != np.int32:
-                X.indptr = np.ascontiguousarray(X.indptr, dtype=np.int32)
+            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
+                raise ValueError("64 bit index based sparse matrix are not "
+                                 "supported")
 
         elif X.dtype != DTYPE:
             # since we have to copy we will make it fortran for efficiency
