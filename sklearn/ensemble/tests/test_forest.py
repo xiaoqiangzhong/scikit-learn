@@ -413,6 +413,14 @@ def test_random_hasher():
     assert_equal(linear_clf.score(X_reduced, y), 1.)
 
 
+def test_random_hasher_sparse_data():
+    X, y = datasets.make_multilabel_classification(return_indicator=True,
+                                               random_state=0)
+    hasher = RandomTreesEmbedding(n_estimators=30, random_state=1)
+    X_transformed = hasher.fit_transform(X)
+    assert_equal(X_transformed.shape[0], X.shape[0])
+
+
 def test_parallel_train():
     rng = check_random_state(12321)
     n_samples, n_features = 80, 30
@@ -533,11 +541,8 @@ def check_sparse_input(name, X, X_sparse, y):
 
 
 def test_sparse_input():
-    rng = np.random.RandomState(0)
-    X = rng.rand(40, 10)
-    X[X < .8] = 0
-    y = (4 * rng.rand(40)).astype(np.int)
-
+    X, y = datasets.make_multilabel_classification(return_indicator=True,
+                                                   random_state=0)
 
     for name, sparse_matrix in product(FOREST_ESTIMATORS,
                                        (csr_matrix, csc_matrix)):
