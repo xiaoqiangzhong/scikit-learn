@@ -11,6 +11,7 @@ Testing for the forest module (sklearn.ensemble.forest).
 import pickle
 from collections import defaultdict
 from itertools import product
+import pickle
 
 import numpy as np
 from scipy.sparse import csr_matrix, csc_matrix
@@ -240,6 +241,7 @@ def check_oob_score(name, X, y, n_estimators=20):
         assert_greater(test_score, est.oob_score_)
         assert_greater(est.oob_score_, .8)
 
+
 def test_oob_score():
     yield check_oob_score, "RandomForestClassifier", iris.data, iris.target
     yield (check_oob_score, "RandomForestRegressor", boston.data,
@@ -248,6 +250,7 @@ def test_oob_score():
     # non-contiguous targets in classification
     yield (check_oob_score, "RandomForestClassifier", iris.data,
            iris.target * 2 + 1)
+
 
 def check_gridsearch(name):
     forest = FOREST_CLASSIFIERS[name]()
@@ -501,7 +504,8 @@ def test_max_leaf_nodes_max_depth():
 
 def check_sparse_input(name, X, X_sparse, y):
     ForestEstimator = FOREST_ESTIMATORS
-    dense = ForestEstimator(random_state=0, max_depth=2).fit(X, y)
+    dense = ForestEstimator(random_state=0, max_depth=2,
+                            oob_score=True).fit(X, y)
     sparse = ForestEstimator(random_state=0, max_depth=2).fit(X_sparse, y)
 
     assert_array_almost_equal(sparse.apply(X), dense.apply(X))
@@ -522,6 +526,10 @@ def check_sparse_input(name, X, X_sparse, y):
                                   dense.transform(X))
         assert_array_almost_equal(sparse.fit_transform(X),
                                   dense.fit_transform(X))
+
+    # Check for oob score
+    if dense.bootstrap:
+        assert_almost_equal(dense.oob_score_, sparse.oob_score_)
 
 
 def test_sparse_input():
