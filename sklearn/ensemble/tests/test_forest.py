@@ -21,6 +21,11 @@ from sklearn.utils.testing import assert_array_equal
 from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import assert_false, assert_true
 from sklearn.utils.testing import assert_less, assert_greater
+from sklearn.utils.testing import assert_array_equal
+from sklearn.utils.testing import assert_array_almost_equal
+from sklearn.utils.testing import assert_equal
+from sklearn.utils.testing import assert_almost_equal
+from sklearn.utils.testing import assert_false, assert_true
 
 from sklearn import datasets
 from sklearn.decomposition import TruncatedSVD
@@ -579,7 +584,6 @@ def test_memory_layout():
 
     for name, dtype in product(FOREST_REGRESSORS, [np.float64, np.float32]):
         yield check_memory_layout, name, dtype
-
 
 
 if __name__ == "__main__":
