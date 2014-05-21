@@ -181,8 +181,9 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
 
         Parameters
         ----------
-        X : array-like, shape = [n_samples, n_features]
-            Input data.
+        X : array-like or sparse matrix, shape = [n_samples, n_features]
+            Input data. Use csr sparse matrix and ``dtype=np.float32``
+            for optimal effiency with sparse data.
 
         Returns
         -------
@@ -212,8 +213,9 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
-            The training input samples.
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
+            The training input samples. Use csc sparse matrix with
+            dtype=np.float32 for optimal effiency with sparse data.
 
         y : array-like, shape = [n_samples] or [n_samples, n_outputs]
             The target values (class labels in classification, real numbers in
@@ -430,8 +432,9 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
-            The input samples.
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
+            The input samples. Use csr sparse matrix and ``dtype=np.float32``
+            for optimal effiency with sparse data.
 
         Returns
         -------
@@ -462,8 +465,9 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
-            The input samples.
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
+            The input samples. Use csr sparse matrix and ``dtype=np.float32``
+            for optimal effiency with sparse data.
 
         Returns
         -------
@@ -524,8 +528,9 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
-            The input samples.
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
+            The input samples. Use csr sparse matrix and ``dtype=np.float32``
+            for optimal effiency with sparse data.
 
         Returns
         -------
@@ -581,8 +586,9 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
-            The input samples.
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
+            The input samples. Use csr sparse matrix and ``dtype=np.float32``
+            for optimal effiency with sparse data.
 
         Returns
         -------
@@ -1375,7 +1381,7 @@ class RandomTreesEmbedding(BaseForest):
 
         Parameters
         ----------
-        X : array-like, shape=(n_samples, n_features)
+        X : array-like or sparse matrix, shape=(n_samples, n_features)
             Input data used to build forests.
         """
         self.fit_transform(X, y)
@@ -1386,7 +1392,7 @@ class RandomTreesEmbedding(BaseForest):
 
         Parameters
         ----------
-        X : array-like, shape=(n_samples, n_features)
+        X : array-like or sparse matrix, shape=(n_samples, n_features)
             Input data used to build forests.
 
         Returns
@@ -1394,9 +1400,9 @@ class RandomTreesEmbedding(BaseForest):
         X_transformed: sparse matrix, shape=(n_samples, n_out)
             Transformed dataset.
         """
-        X = safe_asarray(X)
-        rnd = check_random_state(self.random_state)
-        y = rnd.uniform(size=X.shape[0])
+        X = safe_asarray(X, dtype=DTYPE)
+        random_state = check_random_state(self.random_state)
+        y = random_state.uniform(size=X.shape[0])
         super(RandomTreesEmbedding, self).fit(X, y)
         self.one_hot_encoder_ = OneHotEncoder()
         return self.one_hot_encoder_.fit_transform(self.apply(X))
@@ -1406,7 +1412,7 @@ class RandomTreesEmbedding(BaseForest):
 
         Parameters
         ----------
-        X : array-like, shape=(n_samples, n_features)
+        X : array-like or sparse matrix, shape=(n_samples, n_features)
             Input data to be transformed.
 
         Returns

@@ -103,7 +103,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
 
         Parameters
         ----------
-        X : array-like, shape = [n_samples, n_features]
+        X : array-like or sparse matrix, shape = [n_samples, n_features]
             The training input samples. Use ``dtype=np.float32`` for maximum
             efficiency. Sparse matrices are also supported, use csc_matrix for
             maximum efficieny.
@@ -297,7 +297,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
             The input samples. Sparse matrices are also supported.
             Use csr_matrix in case of sparse data.
 
@@ -518,7 +518,7 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
             The input samples.
 
         Returns
@@ -576,7 +576,7 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape = [n_samples, n_features]
+        X : array-like or sparse matrix of shape = [n_samples, n_features]
             The input samples.
 
         Returns
