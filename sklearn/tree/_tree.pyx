@@ -1256,6 +1256,7 @@ cdef class BestSparseSplitter(SparseSplitter):
                 # Add one or two zeros in Xf, if there is any
                 if end_negative != start_positive:
                     Xf[end_negative] = 0.
+                    Xf[start_positive - 1] = 0.
                     end_negative += 1
 
                 if Xf[end - 1] <= Xf[start] + FEATURE_THRESHOLD:
@@ -1277,18 +1278,20 @@ cdef class BestSparseSplitter(SparseSplitter):
                     current_feature_value = Xf[p]
 
                     while p < end:
-                        if p == end_negative:
-                            p = start_positive
+                        while (p_next < end and
+                               Xf[p_next] <= Xf[p] + FEATURE_THRESHOLD):
+                            p = p_next
+                            p_next = (p + 1 if p + 1 != end_negative
+                                      else start_positive)
 
-                        while (p + 1 < end and p + 1 != end_negative and
-                               Xf[p + 1] <= Xf[p] + FEATURE_THRESHOLD):
-                            p += 1
-
-                        # (p + 1 >= end) or (X[samples[p + 1], current_feature] >
-                        #                    X[samples[p], current_feature])
-                        p += 1
+                        # (p_next >= end) or (X[samples[p_next], current_feature] >
+                        #                     X[samples[p], current_feature])
+                        p_prev = p
+                        p = p_next
+                        p_next = (p + 1 if p + 1 != end_negative
+                                  else start_positive)
                         # (p >= end) or (X[samples[p], current_feature] >
-                        #                X[samples[p - 1], current_feature])
+                        #                X[samples[p_prev], current_feature])
 
 
                         if p < end:
@@ -1311,10 +1314,10 @@ cdef class BestSparseSplitter(SparseSplitter):
                                 best_pos = current_pos
                                 best_feature = current_feature
 
-                                current_threshold = (Xf[p - 1] + Xf[p]) / 2.0
+                                current_threshold = (Xf[p_prev] + Xf[p]) / 2.0
 
                                 if current_threshold == Xf[p]:
-                                    current_threshold = Xf[p - 1]
+                                    current_threshold = Xf[p_prev]
 
                                 best_threshold = current_threshold
 
