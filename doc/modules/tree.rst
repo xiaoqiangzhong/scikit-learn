@@ -161,7 +161,7 @@ a PDF file (or any other supported file type) directly in Python::
 
 After being fitted, the model can then be used to predict new values::
 
-    >>> clf.predict(iris.data[0, :])
+    >>> clf.predict(iris.data[:1, :])
     array([0])
 
 .. figure:: ../auto_examples/tree/images/plot_iris_1.png
