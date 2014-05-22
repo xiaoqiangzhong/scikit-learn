@@ -27,6 +27,7 @@ from sklearn.utils.testing import assert_array_almost_equal
 from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import assert_almost_equal
 from sklearn.utils.testing import assert_false, assert_true
+from sklearn.utils.testing import assert_raises
 
 from sklearn import datasets
 from sklearn.decomposition import TruncatedSVD
@@ -598,6 +599,18 @@ def test_memory_layout():
     for name, dtype in product(FOREST_REGRESSORS, [np.float64, np.float32]):
         yield check_memory_layout, name, dtype
 
+
+def test_1d_input():
+    X = iris.data[:, 0].ravel()
+    X_2d = iris.data[:, 0].reshape((-1, 1))
+    y = iris.target
+
+    for name, ForestEstimator in ALL_FORESTS.items():
+        assert_raises(ValueError, ForestEstimator(random_state=0).fit, X, y)
+
+        est = ForestEstimator(random_state=0)
+        est.fit(X_2d, y)
+        assert_raises(ValueError, est.predict, X)
 
 if __name__ == "__main__":
     import nose

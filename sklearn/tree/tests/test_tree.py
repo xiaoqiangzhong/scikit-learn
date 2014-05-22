@@ -1183,3 +1183,21 @@ def test_random_sparse_matrix_of_random_forest():
 
         assert_array_almost_equal(s.predict_proba(X_test.toarray()),
                                   d.predict_proba(X_test.toarray()))
+
+def check_raise_error_on_1d_input(name):
+    TreeEstimator = ALL_TREES[name]
+
+    X = iris.data[:, 0].ravel()
+    X_2d = iris.data[:, 0].reshape((-1, 1))
+    y = iris.target
+
+    assert_raises(ValueError, TreeEstimator(random_state=0).fit, X, y)
+
+    est = TreeEstimator(random_state=0)
+    est.fit(X_2d, y)
+    assert_raises(ValueError, est.predict, X)
+
+def test_1d_input():
+    for name in ALL_TREES:
+      yield check_raise_error_on_1d_input, name
+
