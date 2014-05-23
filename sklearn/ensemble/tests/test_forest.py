@@ -253,6 +253,32 @@ def test_oob_score():
            iris.target * 2 + 1)
 
 
+def check_oob_score_raise_error(name):
+    ForestEstimator = FOREST_ESTIMATORS[name]
+
+
+    if name in FOREST_TRANSFORMERS:
+        for oob_score in [True, False]:
+            assert_raises(TypeError, ForestEstimator, oob_score=oob_score)
+
+    else:
+        # Unfitted /  no bootrapt / no oob_score
+        for oob_score, bootstrap in [(True, False), (False, True),
+                                     (False, False)]:
+            est = ForestEstimator(oob_score=oob_score, bootstrap=bootstrap,
+                                  random_state=0)
+            assert_false(hasattr(est, "oob_score_"))
+
+        # No boostrap
+        assert_raises(ValueError, ForestEstimator(oob_score=True,
+                                                  bootstrap=False).fit, X, y)
+
+
+def test_oob_score_raise_error():
+    for name in FOREST_ESTIMATORS:
+        yield check_oob_score_raise_error, name
+
+
 def check_gridsearch(name):
     forest = FOREST_CLASSIFIERS[name]()
     clf = GridSearchCV(forest, {'n_estimators': (1, 2), 'max_depth': (1, 2)})
