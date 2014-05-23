@@ -49,14 +49,14 @@ from scipy.sparse import issparse
 from ..base import ClassifierMixin, RegressorMixin
 from ..externals.joblib import Parallel, delayed
 from ..externals import six
-from ..externals.six.moves import xrange
+from ..externals.six.moves import xrange as range
 from ..feature_selection.from_model import _LearntSelectorMixin
 from ..metrics import r2_score
 from ..preprocessing import OneHotEncoder
 from ..tree import (DecisionTreeClassifier, DecisionTreeRegressor,
                     ExtraTreeClassifier, ExtraTreeRegressor)
 from ..tree._tree import DTYPE, DOUBLE
-from ..utils import array2d, check_random_state, check_arrays, safe_asarray
+from ..utils import check_random_state, check_arrays, safe_asarray
 from ..utils.validation import DataConversionWarning
 from .base import BaseEnsemble, _partition_estimators
 
@@ -120,13 +120,13 @@ def _parallel_predict_proba(trees, X, n_classes, n_outputs):
     else:
         proba = []
 
-        for k in xrange(n_outputs):
+        for k in range(n_outputs):
             proba.append(np.zeros((n_samples, n_classes[k])))
 
         for tree in trees:
             proba_tree = tree.predict_proba(X)
 
-            for k in xrange(n_outputs):
+            for k in range(n_outputs):
                 if n_classes[k] == tree.n_classes_[k]:
                     proba[k] += proba_tree[k]
 
@@ -377,7 +377,7 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
         oob_score = 0.0
         predictions = []
 
-        for k in xrange(self.n_outputs_):
+        for k in range(self.n_outputs_):
             predictions.append(np.zeros((n_samples, n_classes_[k])))
 
         sample_indices = np.arange(n_samples)
@@ -390,10 +390,10 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
             if self.n_outputs_ == 1:
                 p_estimator = [p_estimator]
 
-            for k in xrange(self.n_outputs_):
+            for k in range(self.n_outputs_):
                 predictions[k][mask, :] += p_estimator[k]
 
-        for k in xrange(self.n_outputs_):
+        for k in range(self.n_outputs_):
             if (predictions[k].sum(axis=1) == 0).any():
                 warn("Some inputs do not have OOB scores. "
                      "This probably means too few trees were used "
@@ -418,7 +418,7 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
         self.classes_ = []
         self.n_classes_ = []
 
-        for k in xrange(self.n_outputs_):
+        for k in range(self.n_outputs_):
             classes_k, y[:, k] = np.unique(y[:, k], return_inverse=True)
             self.classes_.append(classes_k)
             self.n_classes_.append(classes_k.shape[0])
@@ -451,7 +451,7 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
             n_samples = proba[0].shape[0]
             predictions = np.zeros((n_samples, self.n_outputs_))
 
-            for k in xrange(self.n_outputs_):
+            for k in range(self.n_outputs_):
                 predictions[:, k] = self.classes_[k].take(np.argmax(proba[k],
                                                                     axis=1),
                                                           axis=0)
@@ -505,17 +505,17 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
         proba = all_proba[0]
 
         if self.n_outputs_ == 1:
-            for j in xrange(1, len(all_proba)):
+            for j in range(1, len(all_proba)):
                 proba += all_proba[j]
 
             proba /= len(self.estimators_)
 
         else:
-            for j in xrange(1, len(all_proba)):
-                for k in xrange(self.n_outputs_):
+            for j in range(1, len(all_proba)):
+                for k in range(self.n_outputs_):
                     proba[k] += all_proba[j][k]
 
-            for k in xrange(self.n_outputs_):
+            for k in range(self.n_outputs_):
                 proba[k] /= self.n_estimators
 
         return proba
@@ -546,7 +546,7 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
             return np.log(proba)
 
         else:
-            for k in xrange(self.n_outputs_):
+            for k in range(self.n_outputs_):
                 proba[k] = np.log(proba[k])
 
             return proba
@@ -655,7 +655,7 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
 
         self.oob_score_ = 0.0
 
-        for k in xrange(self.n_outputs_):
+        for k in range(self.n_outputs_):
             self.oob_score_ += r2_score(y[:, k],
                                         predictions[:, k])
 

@@ -619,6 +619,7 @@ def test_1d_input():
     for name in FOREST_ESTIMATORS:
         yield check_1d_input, name, X, X_2d, y
 
+
 if __name__ == "__main__":
     import nose
     nose.runmodule()
