@@ -183,7 +183,7 @@ def test_probability():
         yield check_probability, name
 
 
-def check_importance(name, X, y):
+def check_importances(name, X, y):
     """Check variable importances."""
 
     ForestClassifier = FOREST_CLASSIFIERS[name]
@@ -220,7 +220,17 @@ def test_importances():
                                         random_state=0)
 
     for name in FOREST_CLASSIFIERS:
-        yield check_importance, name, X, y
+        yield check_importances, name, X, y
+
+
+def check_unfitted_feature_importances(name):
+    assert_raises(ValueError, getattr, FOREST_ESTIMATORS[name](random_state=0),
+                  "feature_importances_")
+
+
+def test_unfitted_feature_importances():
+    for name in FOREST_ESTIMATORS:
+        yield check_unfitted_feature_importances, name
 
 
 def check_oob_score(name, X, y, n_estimators=20):
