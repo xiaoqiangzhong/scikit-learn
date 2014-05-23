@@ -194,10 +194,6 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
         if issparse(X):
             X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
 
-            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
-                raise ValueError("64 bit index based sparse matrix are not "
-                                 "supported")
-
         else:
             X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
@@ -239,10 +235,6 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
         if issparse(X):
             X, = check_arrays(X, dtype=DTYPE, sparse_format='csc')
             X.sort_indices()
-
-            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
-                raise ValueError("64 bit index based sparse matrix are not "
-                                 "supported")
 
         else:
             X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
@@ -481,10 +473,6 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
         if issparse(X):
             X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
 
-            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
-                raise ValueError("64 bit index based sparse matrix are not "
-                                 "supported")
-
         else:
             X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
@@ -600,9 +588,6 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
         if issparse(X):
             X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
 
-            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
-                raise ValueError("64 bit index based sparse matrix are not "
-                                 "supported")
         else:
             X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
