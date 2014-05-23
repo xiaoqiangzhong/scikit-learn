@@ -552,9 +552,9 @@ def test_max_leaf_nodes_max_depth():
 
 
 def check_sparse_input(name, X, X_sparse, y):
-    ForestEstimator = FOREST_ESTIMATORS
-    dense = ForestEstimator(random_state=0, max_depth=2,
-                            oob_score=True).fit(X, y)
+    ForestEstimator = FOREST_ESTIMATORS[name]
+
+    dense = ForestEstimator(random_state=0, max_depth=2).fit(X, y)
     sparse = ForestEstimator(random_state=0, max_depth=2).fit(X_sparse, y)
 
     assert_array_almost_equal(sparse.apply(X), dense.apply(X))
@@ -571,23 +571,20 @@ def check_sparse_input(name, X, X_sparse, y):
                                   dense.predict_log_proba(X))
 
     if name in FOREST_TRANSFORMERS:
-        assert_array_almost_equal(sparse.transform(X),
-                                  dense.transform(X))
-        assert_array_almost_equal(sparse.fit_transform(X),
-                                  dense.fit_transform(X))
-
-    # Check for oob score
-    if dense.bootstrap:
-        assert_almost_equal(dense.oob_score_, sparse.oob_score_)
+        assert_array_almost_equal(sparse.transform(X).toarray(),
+                                  dense.transform(X).toarray())
+        assert_array_almost_equal(sparse.fit_transform(X).toarray(),
+                                  dense.fit_transform(X).toarray())
 
 
 def test_sparse_input():
     X, y = datasets.make_multilabel_classification(return_indicator=True,
-                                                   random_state=0)
+                                                   random_state=0,
+                                                   n_samples=40)
 
     for name, sparse_matrix in product(FOREST_ESTIMATORS,
                                        (csr_matrix, csc_matrix)):
-        yield name, X, sparse_matrix(X), y
+        yield check_sparse_input, name, X, sparse_matrix(X), y
 
 
 def check_memory_layout(name, dtype):
