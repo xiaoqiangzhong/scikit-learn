@@ -11,7 +11,6 @@ Testing for the forest module (sklearn.ensemble.forest).
 import pickle
 from collections import defaultdict
 from itertools import product
-import pickle
 
 import numpy as np
 from scipy.sparse import csr_matrix, csc_matrix
@@ -22,12 +21,8 @@ from sklearn.utils.testing import assert_array_equal
 from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import assert_false, assert_true
 from sklearn.utils.testing import assert_less, assert_greater
-from sklearn.utils.testing import assert_array_equal
-from sklearn.utils.testing import assert_array_almost_equal
-from sklearn.utils.testing import assert_equal
-from sklearn.utils.testing import assert_almost_equal
-from sklearn.utils.testing import assert_false, assert_true
 from sklearn.utils.testing import assert_raises
+from sklearn.utils.testing import assert_warns
 
 from sklearn import datasets
 from sklearn.decomposition import TruncatedSVD
@@ -227,11 +222,13 @@ def test_importances():
     for name in FOREST_CLASSIFIERS:
         yield check_importance, name, X, y
 
+
 def check_oob_score(name, X, y, n_estimators=20):
     """Check that oob prediction is a good estimation of the generalization
        error."""
+    # Proper behavior
     est = FOREST_ESTIMATORS[name](oob_score=True, random_state=0,
-                                  n_estimators=n_estimators)
+                                  n_estimators=n_estimators, bootstrap=True)
     n_samples = X.shape[0]
     est.fit(X[:n_samples // 2, :], y[:n_samples // 2])
     test_score = est.score(X[n_samples // 2:, :], y[n_samples // 2:])
@@ -242,15 +239,22 @@ def check_oob_score(name, X, y, n_estimators=20):
         assert_greater(test_score, est.oob_score_)
         assert_greater(est.oob_score_, .8)
 
+    # Check warning if not enought estimator
+    with np.errstate(divide="ignore", invalid="ignore"):
+        est = FOREST_ESTIMATORS[name](oob_score=True, random_state=0,
+                                      n_estimators=1, bootstrap=True)
+        assert_warns(UserWarning, est.fit, X, y)
+
 
 def test_oob_score():
-    yield check_oob_score, "RandomForestClassifier", iris.data, iris.target
-    yield (check_oob_score, "RandomForestRegressor", boston.data,
-           boston.target, 50)
+    for name in FOREST_CLASSIFIERS:
+        yield check_oob_score, name, iris.data, iris.target
 
-    # non-contiguous targets in classification
-    yield (check_oob_score, "RandomForestClassifier", iris.data,
-           iris.target * 2 + 1)
+        # non-contiguous targets in classification
+        yield check_oob_score, name, iris.data, iris.target * 2 + 1
+
+    for name in FOREST_REGRESSORS:
+        yield check_oob_score, name, boston.data, boston.target, 50
 
 
 def check_oob_score_raise_error(name):
