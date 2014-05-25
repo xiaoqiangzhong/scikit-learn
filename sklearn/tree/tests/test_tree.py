@@ -919,22 +919,26 @@ def test_sparse_input():
     for name, sparse_matrix in product(REG_TREES, (csr_matrix, csc_matrix)):
         if name in SPARSE_TREES:
             yield (check_sparse_input, name, "boston",
-                   sparse_matrix(boston.data[::2]), boston.data[::2],
-                   boston.target[::2])
+                   sparse_matrix(boston.data[::4]), boston.data[::4],
+                   boston.target[::4])
 
     # Unfortunately we can't fix the seed in scipy 0.11
-    X = sparse_rand(40, 20, density=0.3, format='csc')
+    n_samples = 40
+    X = sparse_rand(n_samples, 20, density=0.3, format='csc')
     X_mix = X.copy()
     X_mix.data = 2 * X_mix.data - 1
-    y = random_state.randint(2, size=(40, ))
+    y_bernouili = random_state.randint(0, 2, size=(n_samples, ))
+    y_uniform = random_state.uniform(size=(n_samples, ))
 
     for name in SPARSE_TREES:
+        y_random = y_bernouili if name in CLF_TREES else y_uniform
+
         yield (check_sparse_input, name, "density %s" % 0.3,
-               X, X.toarray(), y)
+               X, X.toarray(), y_random)
         yield (check_sparse_input, name, "neg-density %s" % 0.3,
-               -X, (-X).toarray(), y)
+               -X, (-X).toarray(), y_random)
         yield (check_sparse_input, name, "mix-density %s" % 0.3,
-               X_mix, X_mix.toarray(), y)
+               X_mix, X_mix.toarray(), y_random)
 
 
 def check_raise_error_on_1d_input(name):
