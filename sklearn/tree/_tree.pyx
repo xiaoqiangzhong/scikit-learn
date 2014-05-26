@@ -1326,16 +1326,16 @@ cdef class BestSparseSplitter(SparseSplitter):
                         &end_negative, &start_positive, sorted_samples,
                         &is_samples_sorted)
 
-            if best_pos < end_negative:
+            if best_threshold < 0.:
                 p = start
                 partition_end = end_negative
-            elif best_pos >= start_positive:
+            elif best_threshold > 0.:
                 p = start_positive
                 partition_end = end
             else:
                 # Data are already split
-                p = start
-                partition_end = start
+                p = best_pos
+                partition_end = best_pos
 
             while p < partition_end:
                 current_feature_value = Xf[p]
@@ -1610,16 +1610,16 @@ cdef class RandomSparseSplitter(SparseSplitter):
                         &end_negative, &start_positive, sorted_samples,
                         &is_samples_sorted)
 
-            if best_pos < end_negative:
+            if best_threshold < 0.:
                 p = start
                 partition_end = end_negative
-            elif best_pos >= start_positive:
+            elif best_threshold > 0.:
                 p = start_positive
                 partition_end = end
             else:
                 # Data are already split
-                p = start
-                partition_end = start
+                p = best_pos
+                partition_end = best_pos
 
             while p < partition_end:
                 current_feature_value = Xf[p]
