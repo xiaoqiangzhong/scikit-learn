@@ -9,6 +9,8 @@ randomized trees. Single and multi-output problems are both handled.
 #          Noel Dawe <noel@dawe.me>
 #          Satrajit Gosh <satrajit.ghosh@gmail.com>
 #          Joly Arnaud <arnaud.v.joly@gmail.com>
+#          Fares Hedayati
+#
 # Licence: BSD 3 clause
 
 from __future__ import division

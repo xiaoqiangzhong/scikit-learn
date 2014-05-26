@@ -10,6 +10,7 @@
 #          Lars Buitinck <L.J.Buitinck@uva.nl>
 #          Arnaud Joly <arnaud.v.joly@gmail.com>
 #          Joel Nothman <joel.nothman@gmail.com>
+#          Fares Hedayati
 #
 # Licence: BSD 3 clause
 

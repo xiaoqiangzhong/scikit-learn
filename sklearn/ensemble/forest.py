@@ -35,6 +35,8 @@ Single and multi-output problems are both handled.
 # Authors: Gilles Louppe <g.louppe@gmail.com>
 #          Brian Holt <bdholt1@gmail.com>
 #          Joly Arnaud <arnaud.v.joly@gmail.com>
+#          Fares Hedayati
+#
 # License: BSD 3 clause
 
 from __future__ import division
