@@ -33,8 +33,8 @@ from sklearn.tree import ExtraTreeRegressor
 
 from sklearn import tree
 from sklearn.tree.tree import SPARSE_SPLITTER
+from sklearn.tree._tree import TREE_LEAF
 from sklearn import datasets
-from sklearn.ensemble import RandomForestClassifier
 
 from sklearn.preprocessing._weights import _balance_weights
 
@@ -118,7 +118,6 @@ digits.target = digits.target[perm]
 
 
 def assert_tree_equal(d, s, message):
-    from sklearn.tree._tree import TREE_LEAF
     assert_equal(s.node_count, d.node_count,
                  "{0}: inequal number of node ({1} != {2})"
                  "".format(message, s.node_count, d.node_count))
@@ -135,6 +134,8 @@ def assert_tree_equal(d, s, message):
                        message + ": inequal features")
     assert_array_equal(d.threshold[internal], s.threshold[internal],
                        message + ": inequal threshold")
+    assert_array_equal(d.n_node_samples.sum(), s.n_node_samples.sum(),
+                       message + ": inequal sum(n_node_samples)")
     assert_array_equal(d.n_node_samples, s.n_node_samples,
                        message + ": inequal n_node_samples")
 
@@ -907,6 +908,9 @@ def test_sparse_input():
         yield (check_sparse_input, name, "digits",
                sparse_matrix(digits.data[::2]), digits.data[::2],
                digits.target[::2])
+        yield (check_sparse_input, name, "iris",
+               sparse_matrix(digits.data[::4]), digits.data[::4],
+               digits.target[::4])
         yield (check_sparse_input, name, "multilabel",
                sparse_matrix(X_multilabel), X_multilabel, y_multilabel)
         yield (check_sparse_input, name, "negative-multilabel",
@@ -914,7 +918,7 @@ def test_sparse_input():
                y_multilabel)
         yield (check_sparse_input, name, "only zeros",
                sparse_matrix(np.zeros((20, 3))), np.zeros((20, 3)),
-               random_state.randint(0, 2, (20, )))
+               random_state.randint(0, 4, (20, )))
 
     for name, sparse_matrix in product(REG_TREES, (csr_matrix, csc_matrix)):
         if name in SPARSE_TREES:
