@@ -1188,8 +1188,6 @@ cdef class BestSparseSplitter(SparseSplitter):
         cdef SIZE_t start_positive
         cdef SIZE_t end_negative
 
-
-
         # Sample up to max_features without replacement using a
         # Fisher-Yates-based algorithm (using the local variables `f_i` and
         # `f_j` to compute a permutation of the `features` array).
@@ -1275,7 +1273,6 @@ cdef class BestSparseSplitter(SparseSplitter):
                     p = (start if start != end_negative else start_positive)
                     p_next = (p + 1 if p + 1 != end_negative
                               else start_positive)
-                    current_feature_value = Xf[p]
 
                     while p < end:
                         while (p_next < end and
