@@ -1253,8 +1253,11 @@ cdef class BestSparseSplitter(SparseSplitter):
 
                 # Add one or two zeros in Xf, if there is any
                 if end_negative != start_positive:
+                    start_positive -= 1
+                    Xf[start_positive] = 0.
+
+                if end_negative != start_positive:
                     Xf[end_negative] = 0.
-                    Xf[start_positive - 1] = 0.
                     end_negative += 1
 
                 if Xf[end - 1] <= Xf[start] + FEATURE_THRESHOLD:
@@ -1509,8 +1512,11 @@ cdef class RandomSparseSplitter(SparseSplitter):
 
                 # Add one or two zeros in Xf, if there is any
                 if end_negative != start_positive:
+                    start_positive -= 1
+                    Xf[start_positive] = 0.
+
+                if end_negative != start_positive:
                     Xf[end_negative] = 0.
-                    Xf[start_positive - 1] = 0.
                     end_negative += 1
 
                 # Find min, max
