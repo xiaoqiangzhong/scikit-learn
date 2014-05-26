@@ -833,12 +833,12 @@ def test_memoryerror():
     assert_raises(MemoryError, _realloc_test)
 
 
-def check_sparse_input(name, dataset, X_sparse, X, y):
+def check_sparse_input(name, dataset, X_sparse, X, y, max_depth=None):
     TreeEstimator = ALL_TREES[name]
 
     # Check the default (depth first search)
-    d = TreeEstimator(random_state=0).fit(X, y)
-    s = TreeEstimator(random_state=0).fit(X_sparse, y)
+    d = TreeEstimator(random_state=0, max_depth=max_depth).fit(X, y)
+    s = TreeEstimator(random_state=0, max_depth=max_depth).fit(X_sparse, y)
 
     assert_tree_equal(d.tree_, s.tree_,
                       "{0} with dense and sparse format gave different "
@@ -850,7 +850,7 @@ def check_sparse_input(name, dataset, X_sparse, X, y):
         y_log_proba = d.predict_log_proba(X)
 
     for sparse_matrix in (csr_matrix, csc_matrix, coo_matrix):
-        X_sparse_test = sparse_matrix(X_sparse)
+        X_sparse_test = sparse_matrix(X_sparse, dtype=np.float32)
 
         assert_array_almost_equal(s.predict(X_sparse_test), y_pred)
 
@@ -859,10 +859,35 @@ def check_sparse_input(name, dataset, X_sparse, X, y):
             assert_array_almost_equal(s.predict_log_proba(X_sparse_test),
                                       y_log_proba)
 
+
+def check_sparse_parameters(name, dataset, X_sparse, X, y):
+    TreeEstimator = ALL_TREES[name]
+
     # Check max_features
     d = TreeEstimator(random_state=0, max_features=1, max_depth=2).fit(X, y)
     s = TreeEstimator(random_state=0, max_features=1,
                       max_depth=2).fit(X_sparse, y)
+    assert_tree_equal(d.tree_, s.tree_,
+                      "{0} with dense and sparse format gave different "
+                      "trees".format(name))
+    assert_array_almost_equal(s.predict(X), d.predict(X))
+
+    # Check min_samples_split
+    d = TreeEstimator(random_state=0, max_features=1,
+                      min_samples_split=10).fit(X, y)
+    s = TreeEstimator(random_state=0, max_features=1,
+                      min_samples_split=10).fit(X_sparse, y)
+    assert_tree_equal(d.tree_, s.tree_,
+                      "{0} with dense and sparse format gave different "
+                      "trees".format(name))
+    assert_array_almost_equal(s.predict(X), d.predict(X))
+
+
+    # Check min_samples_leaf
+    d = TreeEstimator(random_state=0,
+                      min_samples_leaf=len(X) // 2).fit(X, y)
+    s = TreeEstimator(random_state=0,
+                      min_samples_leaf=len(X) // 2).fit(X_sparse, y)
     assert_tree_equal(d.tree_, s.tree_,
                       "{0} with dense and sparse format gave different "
                       "trees".format(name))
@@ -877,12 +902,16 @@ def check_sparse_input(name, dataset, X_sparse, X, y):
                       "trees".format(name))
     assert_array_almost_equal(s.predict(X), d.predict(X))
 
+
+def check_sparse_criterion(name, dataset, X_sparse, X, y):
+    TreeEstimator = ALL_TREES[name]
+
     # Check various criterion
     CRITERIONS = REG_CRITERIONS if name in REG_TREES else CLF_CRITERIONS
     for criterion in CRITERIONS:
-        d = TreeEstimator(random_state=0, max_depth=2,
+        d = TreeEstimator(random_state=0, max_depth=3,
                           criterion=criterion).fit(X, y)
-        s = TreeEstimator(random_state=0, max_depth=2,
+        s = TreeEstimator(random_state=0, max_depth=3,
                           criterion=criterion).fit(X_sparse, y)
 
         assert_tree_equal(d.tree_, s.tree_,
@@ -896,7 +925,6 @@ def test_sparse_input():
 
     X_multilabel, y_multilabel = datasets.make_multilabel_classification(
         random_state=0, return_indicator=True, n_samples=30, n_features=10)
-    X_negative_multilabel = - np.abs(X_multilabel)
 
     SPARSE_TREES = [name for name, Tree in ALL_TREES.items()
                     if Tree().splitter in SPARSE_SPLITTER]
@@ -906,43 +934,44 @@ def test_sparse_input():
         yield (check_sparse_input, name, "small", sparse_matrix(X_small),
                X_small, y_small)
         yield (check_sparse_input, name, "digits",
-               sparse_matrix(digits.data[::2]), digits.data[::2],
-               digits.target[::2])
-        yield (check_sparse_input, name, "iris",
                sparse_matrix(digits.data[::4]), digits.data[::4],
                digits.target[::4])
         yield (check_sparse_input, name, "multilabel",
                sparse_matrix(X_multilabel), X_multilabel, y_multilabel)
-        yield (check_sparse_input, name, "negative-multilabel",
-               sparse_matrix(X_negative_multilabel), X_negative_multilabel,
-               y_multilabel)
-        yield (check_sparse_input, name, "only zeros",
+
+
+    n_samples = 20
+    X = random_state.uniform(size=(n_samples, 5))
+    X[X <= 0.8] = 0.
+    X = csc_matrix(X)
+    X_mix = X.copy()
+    X_mix.data = 2 * X_mix.data - 1
+    y_random = random_state.randint(0, 4, size=(n_samples, ))
+
+    for name, check_ in product(SPARSE_TREES,
+                                [check_sparse_criterion,
+                                 check_sparse_input,
+                                 check_sparse_parameters]):
+        yield (check_, name, "pos-uniform",
+               X, X.toarray(), y_random)
+        yield (check_, name, "neg-uniform",
+               -X, (-X).toarray(), y_random)
+        yield (check_, name, "mix-pos-neg",
+               X_mix, X_mix.toarray(), y_random)
+        yield (check_, name, "only zeros",
                sparse_matrix(np.zeros((20, 3))), np.zeros((20, 3)),
                random_state.randint(0, 4, (20, )))
 
-    for name, sparse_matrix in product(REG_TREES, (csr_matrix, csc_matrix)):
-        if name in SPARSE_TREES:
+
+def test_sparse_input_regression():
+    # Due to numerical instability of MSE and too strict test, we limit the
+    # maximal
+    for name, sparse_matrix in product(REG_TREES, (csr_matrix, )):
+        if REG_TREES[name]().splitter in SPARSE_SPLITTER:
             yield (check_sparse_input, name, "boston",
-                   sparse_matrix(boston.data[::4]), boston.data[::4],
-                   boston.target[::4])
-
-    # Unfortunately we can't fix the seed in scipy 0.11
-    n_samples = 40
-    X = sparse_rand(n_samples, 20, density=0.3, format='csc')
-    X_mix = X.copy()
-    X_mix.data = 2 * X_mix.data - 1
-    y_bernouili = random_state.randint(0, 2, size=(n_samples, ))
-    y_uniform = random_state.uniform(size=(n_samples, ))
-
-    for name in SPARSE_TREES:
-        y_random = y_bernouili if name in CLF_TREES else y_uniform
-
-        yield (check_sparse_input, name, "density %s" % 0.3,
-               X, X.toarray(), y_random)
-        yield (check_sparse_input, name, "neg-density %s" % 0.3,
-               -X, (-X).toarray(), y_random)
-        yield (check_sparse_input, name, "mix-density %s" % 0.3,
-               X_mix, X_mix.toarray(), y_random)
+                   sparse_matrix(boston.data, dtype=np.float32),
+                   boston.data.astype(np.float32),
+                   boston.target.astype(np.float64), 3)
 
 
 def check_raise_error_on_1d_input(name):
