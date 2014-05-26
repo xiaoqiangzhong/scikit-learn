@@ -123,7 +123,7 @@ def assert_tree_equal(d, s, message):
                  "".format(message, s.node_count, d.node_count))
 
     assert_array_equal(d.children_right, s.children_right,
-                       message + ": inequal n_node_samples")
+                       message + ": inequal children_right")
     assert_array_equal(d.children_left, s.children_left,
                        message + ": inequal children_left")
 
