@@ -1252,13 +1252,13 @@ cdef class BestSparseSplitter(SparseSplitter):
                     index_to_samples[samples[p]] = p
 
                 # Add one or two zeros in Xf, if there is any
-                if end_negative != start_positive:
+                if end_negative < start_positive:
                     start_positive -= 1
                     Xf[start_positive] = 0.
 
-                if end_negative != start_positive:
-                    Xf[end_negative] = 0.
-                    end_negative += 1
+                    if end_negative != start_positive:
+                        Xf[end_negative] = 0.
+                        end_negative += 1
 
                 if Xf[end - 1] <= Xf[start] + FEATURE_THRESHOLD:
                     features[f_j] = features[n_total_constants]
@@ -1273,11 +1273,12 @@ cdef class BestSparseSplitter(SparseSplitter):
 
                     # Evaluate all splits
                     self.criterion.reset()
-                    p = (start if start != end_negative else start_positive)
-                    p_next = (p + 1 if p + 1 != end_negative
-                              else start_positive)
+                    p = start
 
                     while p < end:
+                        p_next = (p + 1 if p + 1 != end_negative
+                                  else start_positive)
+
                         while (p_next < end and
                                Xf[p_next] <= Xf[p] + FEATURE_THRESHOLD):
                             p = p_next
@@ -1288,8 +1289,6 @@ cdef class BestSparseSplitter(SparseSplitter):
                         #                     X[samples[p], current_feature])
                         p_prev = p
                         p = p_next
-                        p_next = (p + 1 if p + 1 != end_negative
-                                  else start_positive)
                         # (p >= end) or (X[samples[p], current_feature] >
                         #                X[samples[p_prev], current_feature])
 
@@ -1511,19 +1510,18 @@ cdef class RandomSparseSplitter(SparseSplitter):
                             &is_samples_sorted)
 
                 # Add one or two zeros in Xf, if there is any
-                if end_negative != start_positive:
+                if end_negative < start_positive:
                     start_positive -= 1
                     Xf[start_positive] = 0.
 
-                if end_negative != start_positive:
-                    Xf[end_negative] = 0.
-                    end_negative += 1
+                    if end_negative != start_positive:
+                        Xf[end_negative] = 0.
+                        end_negative += 1
 
                 # Find min, max
-                p = (start if start != end_negative else start_positive)
-                min_feature_value = Xf[p]
+                min_feature_value = Xf[start]
                 max_feature_value = min_feature_value
-                p = (p + 1 if p + 1 != end_negative else start_positive)
+                p = (start + 1 if start + 1 != end_negative else start_positive)
 
                 while p < end:
                     current_feature_value = Xf[p]
@@ -1532,7 +1530,6 @@ cdef class RandomSparseSplitter(SparseSplitter):
                         min_feature_value = current_feature_value
                     elif current_feature_value > max_feature_value:
                         max_feature_value = current_feature_value
-
                     p = (p + 1 if p + 1 != end_negative else start_positive)
 
                 if max_feature_value <= min_feature_value + FEATURE_THRESHOLD:
@@ -1564,8 +1561,8 @@ cdef class RandomSparseSplitter(SparseSplitter):
                         partition_end = end_negative
                     else:
                         # Data are already split
-                        p = start_positive
-                        partition_end = start_positive
+                        p = start_positive + (Xf[start_positive] == 0.)
+                        partition_end = p
 
                     while p < partition_end:
                         current_feature_value = Xf[p]
