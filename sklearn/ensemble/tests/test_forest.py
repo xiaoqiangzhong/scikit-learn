@@ -270,11 +270,9 @@ def test_oob_score():
 def check_oob_score_raise_error(name):
     ForestEstimator = FOREST_ESTIMATORS[name]
 
-
     if name in FOREST_TRANSFORMERS:
         for oob_score in [True, False]:
             assert_raises(TypeError, ForestEstimator, oob_score=oob_score)
-
 
         assert_raises(NotImplementedError, ForestEstimator()._set_oob_score,
                       X, y)
@@ -460,7 +458,7 @@ def test_random_hasher():
 
 def test_random_hasher_sparse_data():
     X, y = datasets.make_multilabel_classification(return_indicator=True,
-                                               random_state=0)
+                                                   random_state=0)
     hasher = RandomTreesEmbedding(n_estimators=30, random_state=1)
     X_transformed = hasher.fit_transform(X)
     assert_equal(X_transformed.shape[0], X.shape[0])

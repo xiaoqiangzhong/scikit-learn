@@ -9,7 +9,6 @@ import numpy as np
 from scipy.sparse import csc_matrix
 from scipy.sparse import csr_matrix
 from scipy.sparse import coo_matrix
-from scipy.sparse import rand as sparse_rand
 
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
@@ -882,7 +881,6 @@ def check_sparse_parameters(name, dataset, X_sparse, X, y):
                       "trees".format(name))
     assert_array_almost_equal(s.predict(X), d.predict(X))
 
-
     # Check min_samples_leaf
     d = TreeEstimator(random_state=0,
                       min_samples_leaf=len(X) // 2).fit(X, y)
@@ -892,7 +890,6 @@ def check_sparse_parameters(name, dataset, X_sparse, X, y):
                       "{0} with dense and sparse format gave different "
                       "trees".format(name))
     assert_array_almost_equal(s.predict(X), d.predict(X))
-
 
     # Check best-first search
     d = TreeEstimator(random_state=0, max_leaf_nodes=3).fit(X, y)
@@ -938,7 +935,6 @@ def test_sparse_input():
                digits.target[::4])
         yield (check_sparse_input, name, "multilabel",
                sparse_matrix(X_multilabel), X_multilabel, y_multilabel)
-
 
     n_samples = 20
     X = random_state.uniform(size=(n_samples, 5))
@@ -990,5 +986,4 @@ def check_raise_error_on_1d_input(name):
 
 def test_1d_input():
     for name in ALL_TREES:
-      yield check_raise_error_on_1d_input, name
-
+        yield check_raise_error_on_1d_input, name

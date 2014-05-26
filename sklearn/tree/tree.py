@@ -325,7 +325,6 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
                              " input n_features is %s "
                              % (self.n_features_, n_features))
 
-
         proba = self.tree_.predict(X)
 
         # Classification
