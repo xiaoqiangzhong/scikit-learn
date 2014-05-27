@@ -3404,20 +3404,21 @@ cdef inline void binary_search(INT32_t* sorted_array, INT32_t start, INT32_t end
 
 
 
-cdef inline void  extra_nnz_color(INT32_t* X_indices,
-                                  DTYPE_t* X_data,
-                                  INT32_t indptr_start,
-                                  INT32_t indptr_end,
-                                  SIZE_t* samples,
-                                  SIZE_t start,
-                                  SIZE_t end,
-                                  SIZE_t* index_to_samples,
-                                  DTYPE_t* Xf,
-                                  SIZE_t* end_negative,
-                                  SIZE_t* start_positive) nogil:
-    """Perform intersection between X_indices[indptr_start:indptr_end]
-    and samples[start:end] using a color approach which is
-    O(indptr_end - indptr_start).
+cdef inline void  extra_nnz_index_to_samples(INT32_t* X_indices,
+                                             DTYPE_t* X_data,
+                                             INT32_t indptr_start,
+                                             INT32_t indptr_end,
+                                             SIZE_t* samples,
+                                             SIZE_t start,
+                                             SIZE_t end,
+                                             SIZE_t* index_to_samples,
+                                             DTYPE_t* Xf,
+                                             SIZE_t* end_negative,
+                                             SIZE_t* start_positive) nogil:
+    """intersection between X_indices[indptr_start:indptr_end]
+    and samples[start:end] using a index_to_samples approach.
+
+    Complexity is O(indptr_end - indptr_start).
     """
     cdef INT32_t k_
     cdef SIZE_t index
@@ -3469,8 +3470,14 @@ cdef inline void  extract_nnz_binary_search(INT32_t* X_indices,
                                             SIZE_t* start_positive,
                                             SIZE_t* sorted_samples,
                                             bint* is_samples_sorted) nogil:
-    """Perform intersection between X_indices[indptr_start:indptr_end]
+    """Intersection between X_indices[indptr_start:indptr_end]
     and samples[start:end] using a binary search approach.
+
+    If n_samples = end - start and n_indices = indptr_end - indptr_start,
+    the complexity is
+
+        O((1 - is_samples_sorted[0]) * n_samples * log(n_samples) +
+          n_samples * log(n_indices)).
     """
     cdef SIZE_t n_samples
 
@@ -3551,12 +3558,54 @@ cdef inline void  extract_nnz(INT32_t* X_indices,
                               SIZE_t* start_positive,
                               SIZE_t* sorted_samples,
                               bint* is_samples_sorted) nogil:
+    """ Extract non zero values of X (csc format) in samples[start:end]
+
+    The extracted values are partitionned between negative values
+    Xf[start:end_negative[0]] and positives values Xf[start_positive[0]:end].
+    The samples and index_to_samples are modified accordingly to this
+    partition.
+
+    The extraction correspond to the intersection between the arrays
+    X_indices[indptr_start:indptr_end] and samples[start:end].
+    This is done efficiency using either an index_to_samples based approach
+    or binary search based approach.
+
+    Parameters
+    ----------
+    X_indices : c-array of INT32_t,
+        Indices of the csc matrix which are in sorted order
+
+    X_data : c-array of INT32_t,
+        Data of the csc matrix
+
+    indptr_start, indptr_end : INT32_t,
+        indptr_start, indptr_end = X_indptr[feature], X_indptr[feature + 1]
+        where X_indptr would be the indptr of the csc matrix.
+
+    samples, start, end : c-array of SIZE_t, SIZE_t, SIZE_t
+         samples[start:end] is the subset of samples to split
+
+    index_to_samples : c-arrayof SIZE_t,
+        Mapping between row indices of the csr matrix and the samples array.
+
+    Xf, end_negative, start_positive : c-array of DTYPE_t, SIZE_t*, SIZE_t*,
+        Return extracted non zero values in samples[start:end] where
+        negative values are in [start:end_negative[0]] and positive values
+        are in [start_positive[0]:end].
+
+    sorted_samples, is_samples_sorted : c-array of SIZE_t, bint,
+        If is_samples_sorted, then sorted_samples[start:end] will be the sorted
+        version of samples[start:end], else is_samples_sorted is set to True
+        and samples[start:end]
+
+
+    """
 
     cdef SIZE_t n_indices = <SIZE_t>(indptr_end - indptr_start)
     cdef SIZE_t n_samples = end - start
 
-    # Use binary search to if n_samples * log(n_indices) <
-    # n_indices and coloring technique otherwise.
+    # Use binary search if n_samples * log(n_indices) <
+    # n_indices and index_to_samples approach otherwise.
     # O(n_samples * log(n_indices)) is the running time of binary
     # search and O(n_indices) is the running time of coloring
     # technique.
@@ -3569,6 +3618,6 @@ cdef inline void  extract_nnz(INT32_t* X_indices,
 
     # Using coloring technique to extract non zero values
     else:
-        extra_nnz_color(X_indices, X_data, indptr_start, indptr_end,
-                        samples, start, end, index_to_samples,
-                        Xf, end_negative, start_positive)
+        extra_nnz_index_to_samples(X_indices, X_data, indptr_start, indptr_end,
+                                   samples, start, end, index_to_samples,
+                                   Xf, end_negative, start_positive)
