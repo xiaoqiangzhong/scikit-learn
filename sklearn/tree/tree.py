@@ -28,7 +28,8 @@ from ..externals import six
 from ..externals.six.moves import xrange
 from ..feature_selection.from_model import _LearntSelectorMixin
 from ..utils.validation import check_random_state
-from ..utils.validation import check_arrays
+from ..utils.validation import atleast2d_or_csr
+from ..utils.validation import atleast2d_or_csc
 
 from ._tree import Criterion
 from ._tree import Splitter
@@ -144,16 +145,14 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
 
         # Convert X to the proper type
         if check_input:
+            X = atleast2d_or_csc(X, dtype=DTYPE)
             if issparse(X):
-                X, = check_arrays(X, dtype=DTYPE, sparse_format='csc')
                 X.sort_indices()
 
                 if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
                     raise ValueError("64 bit index based sparse matrix are "
                                      "not supported")
 
-            else:
-                X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
         # Determine output settings
         n_samples, self.n_features_ = X.shape
@@ -308,13 +307,11 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
         y : array of shape = [n_samples] or [n_samples, n_outputs]
             The predicted classes, or the predict values.
         """
-        if issparse(X):
-            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
-            if X.indices.dtype != np.int32 or X.indptr.dtype != np.int32:
-                raise ValueError("64 bit index based sparse matrix are "
-                                 "not supported")
-        else:
-            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
+        X = atleast2d_or_csr(X, dtype=DTYPE)
+        if issparse(X) and (X.indices.dtype != np.int32 or
+                            X.indptr.dtype != np.int32):
+            raise ValueError("No support for int64 index based sparse "
+                             "matrix ")
 
         n_samples, n_features = X.shape
 
@@ -529,15 +526,12 @@ class DecisionTreeClassifier(BaseDecisionTree, ClassifierMixin):
             The class probabilities of the input samples. The order of the
             classes corresponds to that in the attribute `classes_`.
         """
-        if issparse(X):
-            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
+        X = atleast2d_or_csr(X, dtype=DTYPE)
+        if issparse(X) and (X.indices.dtype != np.int32 or
+                            X.indptr.dtype != np.int32):
+            raise ValueError("No support for int64 index based sparse "
+                             "matrix ")
 
-            if (X.indices.dtype != np.int32 or X.indptr.dtype != np.int32):
-                raise ValueError("No support for int64 index based sparse "
-                                 "matrix ")
-
-        else:
-            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
         n_samples, n_features = X.shape
 

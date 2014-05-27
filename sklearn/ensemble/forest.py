@@ -58,7 +58,10 @@ from ..preprocessing import OneHotEncoder
 from ..tree import (DecisionTreeClassifier, DecisionTreeRegressor,
                     ExtraTreeClassifier, ExtraTreeRegressor)
 from ..tree._tree import DTYPE, DOUBLE
-from ..utils import check_random_state, check_arrays, safe_asarray
+from ..utils.validation import check_random_state
+from ..utils.validation import safe_asarray
+from ..utils.validation import atleast2d_or_csr
+from ..utils.validation import atleast2d_or_csc
 from ..utils.validation import DataConversionWarning
 from .base import BaseEnsemble, _partition_estimators
 
@@ -193,11 +196,7 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
             For each datapoint x in X and for each tree in the forest,
             return the index of the leaf x ends up in.
         """
-        if issparse(X):
-            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
-
-        else:
-            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
+        X = atleast2d_or_csr(X, dtype=DTYPE)
 
         results = Parallel(n_jobs=self.n_jobs, verbose=self.verbose,
                            backend="threading")(
@@ -233,12 +232,9 @@ class BaseForest(six.with_metaclass(ABCMeta, BaseEnsemble,
         random_state = check_random_state(self.random_state)
 
         # Convert data
+        X = atleast2d_or_csc(X, dtype=DTYPE)
         if issparse(X):
-            X, = check_arrays(X, dtype=DTYPE, sparse_format='csc')
             X.sort_indices()
-
-        else:
-            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
 
         # Remap output
         n_samples, self.n_features_ = X.shape
@@ -471,11 +467,7 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
             classes corresponds to that in the attribute `classes_`.
         """
         # Check data
-        if issparse(X):
-            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
-
-        else:
-            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
+        X = atleast2d_or_csr(X, dtype=DTYPE)
 
         # Assign chunk of trees to jobs
         n_jobs, n_trees, starts = _partition_estimators(self)
@@ -586,11 +578,7 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
             The predicted values.
         """
         # Check data
-        if issparse(X):
-            X, = check_arrays(X, dtype=DTYPE, sparse_format='csr')
-
-        else:
-            X, = check_arrays(X, dtype=DTYPE, sparse_format="dense")
+        X = atleast2d_or_csr(X, dtype=DTYPE)
 
         # Assign chunk of trees to jobs
         n_jobs, n_trees, starts = _partition_estimators(self)
