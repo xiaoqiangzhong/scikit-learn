@@ -57,8 +57,8 @@ DENSE_SPLITTERS = {"best": _tree.BestSplitter,
                    "presort-best": _tree.PresortBestSplitter,
                    "random": _tree.RandomSplitter}
 
-SPARSE_SPLITTER = {"best": _tree.BestSparseSplitter,
-                   "random": _tree.RandomSparseSplitter}
+SPARSE_SPLITTERS = {"best": _tree.BestSparseSplitter,
+                    "random": _tree.RandomSparseSplitter}
 
 # =============================================================================
 # Base decision tree
@@ -261,7 +261,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
             else:
                 criterion = CRITERIA_REG[self.criterion](self.n_outputs_)
 
-        SPLITTERS = SPARSE_SPLITTER if issparse(X) else DENSE_SPLITTERS
+        SPLITTERS = SPARSE_SPLITTERS if issparse(X) else DENSE_SPLITTERS
 
         splitter = self.splitter
         if not isinstance(self.splitter, Splitter):

@@ -31,7 +31,7 @@ from sklearn.tree import ExtraTreeClassifier
 from sklearn.tree import ExtraTreeRegressor
 
 from sklearn import tree
-from sklearn.tree.tree import SPARSE_SPLITTER
+from sklearn.tree.tree import SPARSE_SPLITTERS
 from sklearn.tree._tree import TREE_LEAF
 from sklearn import datasets
 
@@ -658,7 +658,7 @@ def test_memory_layout():
         y = iris.target
         assert_array_equal(est.fit(X, y).predict(X), y)
 
-        if est.splitter in SPARSE_SPLITTER:
+        if est.splitter in SPARSE_SPLITTERS:
             # csr matrix
             X = csr_matrix(iris.data, dtype=dtype)
             y = iris.target
@@ -924,7 +924,7 @@ def test_sparse_input():
         random_state=0, return_indicator=True, n_samples=30, n_features=10)
 
     SPARSE_TREES = [name for name, Tree in ALL_TREES.items()
-                    if Tree().splitter in SPARSE_SPLITTER]
+                    if Tree().splitter in SPARSE_SPLITTERS]
 
     for name, sparse_matrix in product(SPARSE_TREES,
                                        (csr_matrix, csc_matrix, coo_matrix)):
@@ -963,7 +963,7 @@ def test_sparse_input_regression():
     # Due to numerical instability of MSE and too strict test, we limit the
     # maximal
     for name, sparse_matrix in product(REG_TREES, (csr_matrix, )):
-        if REG_TREES[name]().splitter in SPARSE_SPLITTER:
+        if REG_TREES[name]().splitter in SPARSE_SPLITTERS:
             yield (check_sparse_input, name, "boston",
                    sparse_matrix(boston.data, dtype=np.float32),
                    boston.data.astype(np.float32),
