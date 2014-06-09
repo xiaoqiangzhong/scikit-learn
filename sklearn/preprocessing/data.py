@@ -6,6 +6,7 @@
 
 from itertools import chain, combinations
 import numbers
+import warnings
 
 from abc import ABCMeta, abstractmethod
 import numpy as np

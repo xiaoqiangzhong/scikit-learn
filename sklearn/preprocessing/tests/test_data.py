@@ -66,10 +66,6 @@ SCALER_FUNCTIONS = {
     'maxabs_scale': maxabs_scale
 }
 
-    interact = PolynomialFeatures(2, interaction_only=True, include_bias=True)
-    X_poly = interact.fit_transform(X)
-    assert_array_almost_equal(X_poly, P2[:, [0, 1, 2, 4]])
-
 
 def test_scaler_2d_axis0():
     """Test robust scaling of 2d array along axis0"""
