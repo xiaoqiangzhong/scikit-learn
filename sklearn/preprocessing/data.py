@@ -188,7 +188,7 @@ class MinMaxScaler(BaseScaler):
     """Standardizes features by scaling each feature to a given range.
 
     This estimator scales and translates each feature individually such
-    that it is in the given range on the training set, i.e. between
+    that it is in the given range on the training set, e.g. between
     zero and one.
 
     The standardization is given by::
@@ -199,6 +199,10 @@ class MinMaxScaler(BaseScaler):
 
     This standardization is often used as an alternative to zero mean,
     unit variance scaling.
+
+    Note that if future input exceeds the maximal/minimal values seen
+    during `fit`, the return values of `transform` might lie outside
+    of the specified `feature_range`.
 
     Parameters
     ----------
@@ -217,7 +221,7 @@ class MinMaxScaler(BaseScaler):
     Attributes
     ----------
     `center_` : ndarray, shape (n_features,)
-        Per feature adjustment for minimum.
+        Per feature center.
 
     `scale_` : ndarray, shape (n_features,)
         Per feature relative scaling of the data.
@@ -255,39 +259,8 @@ class MinMaxScaler(BaseScaler):
         data_range = np.max(X, axis=self.axis) - data_min
         data_range = self._handle_zeros_in_scale(data_range)
         self.scale_ = data_range / (feature_range[1] - feature_range[0])
-        self.center_ = data_min
+        self.center_ = data_min - feature_range[0] * self.scale_
         return self
-
-    def transform(self, X, y=None, copy=None):
-        """Perform standardization by centering and scaling
-
-        Parameters
-        ----------
-        X : array-like or CSR matrix.
-            The data used to scale along the specified axis.
-        """
-        if sparse.issparse(X):
-            raise TypeError("MinMaxScaler cannot be applied on sparse inputs")
-
-        X = super(MinMaxScaler, self).transform(X, y, copy)
-        if self.feature_range[0] != 0:
-            X += self.feature_range[0]
-        return X
-
-    def inverse_transform(self, X, copy=None):
-        """Scale back the data to the original representation
-
-        Parameters
-        ----------
-        X : array-like or CSR matrix.
-            The data used to scale along the specified axis.
-        """
-        if copy is None:
-            copy = self.copy
-        X = self._check_array(X, copy)
-        if self.feature_range[0] != 0:
-            X -= self.feature_range[0]
-        return super(MinMaxScaler, self).inverse_transform(X, copy)
 
         @property
         @deprecated("Attribute min_ is deprecated and "
