@@ -407,9 +407,6 @@ def test_min_max_scaler_iris():
     # not default params: min=1, max=2
     scaler = MinMaxScaler(feature_range=(1, 2))
     X_trans = scaler.fit_transform(X)
-    print X_trans
-    print scaler.center_
-    print scaler.scale_
     assert_array_almost_equal(X_trans.min(axis=0), 1)
     assert_array_almost_equal(X_trans.max(axis=0), 2)
 
