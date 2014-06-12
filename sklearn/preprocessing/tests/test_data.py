@@ -557,7 +557,7 @@ def test_robust_scaler_zero_variance_features():
 
     # NOTE: what we expect in the third column depends HEAVILY on the method
     # used to calculate quantiles. The values here were calculated
-    # to fit the quantiles produces by scipy.stats.mquantiles' default
+    # to fit the quantiles produces by scipy.stats.mstats.mquantiles' default
     # quantile-method. Calculating quantiles with
     # scipy.stats.mstats.scoreatquantile
     # would yield very different results!

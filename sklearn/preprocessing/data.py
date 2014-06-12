@@ -466,6 +466,9 @@ class RobustScaler(BaseScaler):
     sample mean / variance in a negative way. In such cases, the median and
     the interquartile range often give better results.
 
+    This scaler uses `scipy.stats.mstats.mquantiles` with default parameters
+    to calculate the interquartile range.
+
     Parameters
     ----------
     interquartile_scale: float or string in  ["normal" (default), ],
