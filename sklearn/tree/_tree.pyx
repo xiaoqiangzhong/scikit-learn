@@ -30,7 +30,6 @@ from sklearn.tree._utils cimport Stack, StackRecord
 from sklearn.tree._utils cimport PriorityHeap, PriorityHeapRecord
 
 
-
 cdef extern from "numpy/arrayobject.h":
     object PyArray_NewFromDescr(object subtype, np.dtype descr,
                                 int nd, np.npy_intp* dims,
@@ -3560,14 +3559,14 @@ cdef inline void  extract_nnz(INT32_t* X_indices,
                               bint* is_samples_sorted) nogil:
     """ Extract non zero values of X (csc format) in samples[start:end]
 
-    The extracted values are partitionned between negative values
-    Xf[start:end_negative[0]] and positives values Xf[start_positive[0]:end].
-    The samples and index_to_samples are modified accordingly to this
+    The extracted values are partitioned between negative values
+    Xf[start:end_negative[0]] and positive values Xf[start_positive[0]:end].
+    The samples and index_to_samples are modified according to this
     partition.
 
-    The extraction correspond to the intersection between the arrays
+    The extraction corresponds to the intersection between the arrays
     X_indices[indptr_start:indptr_end] and samples[start:end].
-    This is done efficiency using either an index_to_samples based approach
+    This is done efficiently using either an index_to_samples based approach
     or binary search based approach.
 
     Parameters
@@ -3597,10 +3596,7 @@ cdef inline void  extract_nnz(INT32_t* X_indices,
         If is_samples_sorted, then sorted_samples[start:end] will be the sorted
         version of samples[start:end], else is_samples_sorted is set to True
         and samples[start:end]
-
-
     """
-
     cdef SIZE_t n_indices = <SIZE_t>(indptr_end - indptr_start)
     cdef SIZE_t n_samples = end - start
 
