@@ -1130,6 +1130,45 @@ cdef class SparseSplitter(Splitter):
             index_to_samples[samples[p]] = p
 
 
+cdef inline void _find_best_split(Criterion criterion, double impurity, DTYPE_t* Xf, SIZE_t
+                                  min_samples_leaf, SIZE_t start, SIZE_t end,
+                                  SIZE_t first_sample, SIZE_t last_sample,
+                                  SplitInfo* current, SplitInfo* best) nogil:
+    cdef SIZE_t p = start
+    while p < end:
+        while (p + 1 < end and
+               Xf[p + 1] <= Xf[p] + FEATURE_THRESHOLD):
+            p += 1
+
+        # (p + 1 >= end) or (X[samples[p + 1], current.feature] >
+        #                    X[samples[p], current.feature])
+        p += 1
+        # (p >= end) or (X[samples[p], current.feature] >
+        #                X[samples[p - 1], current.feature])
+
+
+        if p < end:
+            current.pos = p
+
+            # Reject if min_samples_leaf is not guaranteed
+            if (((current.pos - first_sample) < min_samples_leaf) or
+                    ((last_sample - current.pos) < min_samples_leaf)):
+                continue
+
+            criterion.update(current.pos)
+            current.improvement = criterion.impurity_improvement(impurity)
+
+            if current.improvement > best.improvement:
+                criterion.children_impurity(&current.impurity_left,
+                                            &current.impurity_right)
+
+                current.threshold = (Xf[p - 1] + Xf[p]) / 2.0
+                if current.threshold == Xf[p]:
+                    current.threshold = Xf[p - 1]
+
+                best[0] = current[0]  # copy
+
+
 cdef class BestSparseSplitter(SparseSplitter):
     """Splitter for finding the best split, using the sparse data."""
 
@@ -1183,9 +1222,6 @@ cdef class BestSparseSplitter(SparseSplitter):
         cdef DTYPE_t current_feature_value
         cdef SIZE_t partition_end
 
-        cdef SIZE_t k_
-        cdef SIZE_t p_next
-        cdef SIZE_t p_prev
         cdef bint is_samples_sorted = 0  # indicate is sorted_samples is
                                          # inititialized
 
@@ -1281,46 +1317,12 @@ cdef class BestSparseSplitter(SparseSplitter):
 
                     # Evaluate all splits
                     self.criterion.reset()
-                    p = start
-
-                    while p < end:
-                        p_next = (p + 1 if p + 1 != end_negative
-                                  else start_positive)
-
-                        while (p_next < end and
-                               Xf[p_next] <= Xf[p] + FEATURE_THRESHOLD):
-                            p = p_next
-                            p_next = (p + 1 if p + 1 != end_negative
-                                      else start_positive)
-
-                        # (p_next >= end) or (X[samples[p_next], current.feature] >
-                        #                     X[samples[p], current.feature])
-                        p_prev = p
-                        p = p_next
-                        # (p >= end) or (X[samples[p], current.feature] >
-                        #                X[samples[p_prev], current.feature])
-
-
-                        if p < end:
-                            current.pos = p
-
-                            # Reject if min_samples_leaf is not guaranteed
-                            if (((current.pos - start) < min_samples_leaf) or
-                                    ((end - current.pos) < min_samples_leaf)):
-                                continue
-
-                            self.criterion.update(current.pos)
-                            current.improvement = self.criterion.impurity_improvement(impurity)
-
-                            if current.improvement > best.improvement:
-                                self.criterion.children_impurity(&current.impurity_left,
-                                                                 &current.impurity_right)
-
-                                current.threshold = (Xf[p_prev] + Xf[p]) / 2.0
-                                if current.threshold == Xf[p]:
-                                    current.threshold = Xf[p_prev]
-
-                                best = current  # copy
+                    _find_best_split(self.criterion, impurity, Xf, min_samples_leaf,
+                                     start, end_negative, start, end,
+                                     &current, &best)
+                    _find_best_split(self.criterion, impurity, Xf, min_samples_leaf,
+                                     start_positive, end, start, end,
+                                     &current, &best)
 
         # Reorganize into samples[start:best.pos] + samples[best.pos:end]
         if best.pos < end:
@@ -1770,39 +1772,8 @@ cdef class BestSplitter(DenseSplitter):
 
                     # Evaluate all splits
                     self.criterion.reset()
-                    p = start
-
-                    while p < end:
-                        while (p + 1 < end and
-                               Xf[p + 1] <= Xf[p] + FEATURE_THRESHOLD):
-                            p += 1
-
-                        # (p + 1 >= end) or (X[samples[p + 1], current.feature] >
-                        #                    X[samples[p], current.feature])
-                        p += 1
-                        # (p >= end) or (X[samples[p], current.feature] >
-                        #                X[samples[p - 1], current.feature])
-
-                        if p < end:
-                            current.pos = p
-
-                            # Reject if min_samples_leaf is not guaranteed
-                            if (((current.pos - start) < min_samples_leaf) or
-                                    ((end - current.pos) < min_samples_leaf)):
-                                continue
-
-                            self.criterion.update(current.pos)
-                            current.improvement = self.criterion.impurity_improvement(impurity)
-
-                            if current.improvement > best.improvement:
-                                self.criterion.children_impurity(&current.impurity_left,
-                                                                 &current.impurity_right)
-
-                                current.threshold = (Xf[p - 1] + Xf[p]) / 2.0
-                                if current.threshold == Xf[p]:
-                                    current.threshold = Xf[p - 1]
-
-                                best = current  # copy
+                    _find_best_split(self.criterion, impurity, Xf, min_samples_leaf,
+                                     start, end, start, end, &current, &best)
 
         # Reorganize into samples[start:best.pos] + samples[best.pos:end]
         if best.pos < end:
@@ -2327,39 +2298,9 @@ cdef class PresortBestSplitter(DenseSplitter):
                     features[f_i], features[f_j] = features[f_j], features[f_i]
 
                     self.criterion.reset()
-                    p = start
-
-                    while p < end:
-                        while (p + 1 < end and
-                               Xf[p + 1] <= Xf[p] + FEATURE_THRESHOLD):
-                            p += 1
-
-                        # (p + 1 >= end) or (X[samples[p + 1], current.feature] >
-                        #                    X[samples[p], current.feature])
-                        p += 1
-                        # (p >= end) or (X[samples[p], current.feature] >
-                        #                X[samples[p - 1], current.feature])
-
-                        if p < end:
-                            current.pos = p
-
-                            # Reject if min_samples_leaf is not guaranteed
-                            if (((current.pos - start) < min_samples_leaf) or
-                                    ((end - current.pos) < min_samples_leaf)):
-                                continue
-
-                            self.criterion.update(current.pos)
-                            current.improvement = self.criterion.impurity_improvement(impurity)
-
-                            if current.improvement > best.improvement:
-                                self.criterion.children_impurity(&current.impurity_left,
-                                                                 &current.impurity_right)
-
-                                current.threshold = (Xf[p - 1] + Xf[p]) / 2.0
-                                if current.threshold == Xf[p]:
-                                    current.threshold = Xf[p - 1]
-
-                                best = current  # copy
+                    _find_best_split(self.criterion, impurity, Xf, min_samples_leaf,
+                                     start, end, start, end,
+                                     &current, &best)
 
         # Reorganize into samples[start:best.pos] + samples[best.pos:end]
         if best.pos < end:
