@@ -1129,6 +1129,46 @@ cdef class SparseSplitter(Splitter):
         for p in range(n_samples):
             index_to_samples[samples[p]] = p
 
+    cdef inline SIZE_t _partition(self, DTYPE_t* Xf, double threshold, SIZE_t start, SIZE_t end,
+                         SIZE_t end_negative, SIZE_t start_positive,
+                         SIZE_t zero_pos) nogil:
+        cdef double value
+        cdef SIZE_t partition_end
+        cdef SIZE_t tmp, p
+
+        if threshold < 0.:
+            p = start
+            partition_end = end_negative
+        elif threshold > 0.:
+            p = start_positive
+            partition_end = end
+        else:
+            # Data are already split
+            return zero_pos
+
+        while p < partition_end:
+            value = Xf[p]
+
+            if value <= threshold:
+                p += 1
+
+            else:
+                partition_end -= 1
+
+                Xf[p] = Xf[partition_end]
+                Xf[partition_end] = value
+
+                tmp = self.samples[partition_end]
+                self.samples[partition_end] = self.samples[p]
+                self.samples[p] = tmp
+
+                self.index_to_samples[self.samples[partition_end]] = \
+                        partition_end
+                self.index_to_samples[self.samples[p]] = p
+
+        return partition_end
+
+
 
 cdef inline void _find_best_split(Criterion criterion, double impurity, DTYPE_t* Xf, SIZE_t
                                   min_samples_leaf, SIZE_t start, SIZE_t end,
@@ -1220,7 +1260,6 @@ cdef class BestSparseSplitter(SparseSplitter):
         # n_total_constants = n_known_constants + n_found_constants
         cdef SIZE_t n_total_constants = n_known_constants
         cdef DTYPE_t current_feature_value
-        cdef SIZE_t partition_end
 
         cdef bint is_samples_sorted = 0  # indicate is sorted_samples is
                                          # inititialized
@@ -1331,36 +1370,8 @@ cdef class BestSparseSplitter(SparseSplitter):
                         samples, start, end, index_to_samples,  Xf,
                         &end_negative, &start_positive, sorted_samples,
                         &is_samples_sorted)
-
-            if best.threshold < 0.:
-                p = start
-                partition_end = end_negative
-            elif best.threshold > 0.:
-                p = start_positive
-                partition_end = end
-            else:
-                # Data are already split
-                p = best.pos
-                partition_end = best.pos
-
-            while p < partition_end:
-                current_feature_value = Xf[p]
-
-                if current_feature_value <= best.threshold:
-                    p += 1
-
-                else:
-                    partition_end -= 1
-
-                    Xf[p] = Xf[partition_end]
-                    Xf[partition_end] = current_feature_value
-
-                    tmp = samples[partition_end]
-                    samples[partition_end] = samples[p]
-                    samples[p] = tmp
-
-                    index_to_samples[samples[partition_end]] = partition_end
-                    index_to_samples[samples[p]] = p
+            self._partition(Xf, best.threshold, start, end,
+                            end_negative, start_positive, best.pos)
 
         # Respect invariant for constant features: the original order of
         # element in features[:n_known_constants] must be preserved for sibling
@@ -1433,7 +1444,6 @@ cdef class RandomSparseSplitter(SparseSplitter):
         cdef SIZE_t n_known_constants = n_constant_features[0]
         # n_total_constants = n_known_constants + n_found_constants
         cdef SIZE_t n_total_constants = n_known_constants
-        cdef SIZE_t partition_end
 
         cdef DTYPE_t min_feature_value
         cdef DTYPE_t max_feature_value
@@ -1546,38 +1556,11 @@ cdef class RandomSparseSplitter(SparseSplitter):
                     if current.threshold == max_feature_value:
                         current.threshold = min_feature_value
 
-                    # Partition
-                    if current.threshold > 0.:
-                        p = start_positive
-                        partition_end = end
-                    elif current.threshold < 0.:
-                        p = start
-                        partition_end = end_negative
-                    else:
-                        # Data are already split
-                        p = start_positive + (Xf[start_positive] == 0.)
-                        partition_end = p
-
-                    while p < partition_end:
-                        current_feature_value = Xf[p]
-
-                        if current_feature_value <= current.threshold:
-                            p += 1
-
-                        else:
-                            partition_end -= 1
-
-                            Xf[p] = Xf[partition_end]
-                            Xf[partition_end] = current_feature_value
-
-                            tmp = samples[partition_end]
-                            samples[partition_end] = samples[p]
-                            samples[p] = tmp
-
-                            index_to_samples[samples[partition_end]] = partition_end
-                            index_to_samples[samples[p]] = p
-
-                    current.pos = partition_end
+                    current.pos = self._partition(Xf, current.threshold,
+                                                  start, end, end_negative,
+                                                  start_positive,
+                                                  start_positive +
+                                                  (Xf[start_positive] == 0.))
 
                     # Reject if min_samples_leaf is not guaranteed
                     if (((current.pos - start) < min_samples_leaf) or
@@ -1602,36 +1585,9 @@ cdef class RandomSparseSplitter(SparseSplitter):
                         samples, start, end, index_to_samples,  Xf,
                         &end_negative, &start_positive, sorted_samples,
                         &is_samples_sorted)
-
-            if best.threshold < 0.:
-                p = start
-                partition_end = end_negative
-            elif best.threshold > 0.:
-                p = start_positive
-                partition_end = end
-            else:
-                # Data are already split
-                p = best.pos
-                partition_end = best.pos
-
-            while p < partition_end:
-                current_feature_value = Xf[p]
-
-                if current_feature_value <= best.threshold:
-                    p += 1
-
-                else:
-                    partition_end -= 1
-
-                    Xf[p] = Xf[partition_end]
-                    Xf[partition_end] = current_feature_value
-
-                    tmp = samples[partition_end]
-                    samples[partition_end] = samples[p]
-                    samples[p] = tmp
-
-                    index_to_samples[samples[partition_end]] = partition_end
-                    index_to_samples[samples[p]] = p
+            self._partition(Xf, best.threshold, start, end,
+                            end_negative, start_positive,
+                            best.pos)
 
         # Respect invariant for constant features: the original order of
         # element in features[:n_known_constants] must be preserved for sibling
