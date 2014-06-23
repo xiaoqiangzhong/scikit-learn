@@ -386,6 +386,7 @@ def test_standard_scaler_zero_variance_features():
     X_trans_inv = scaler.inverse_transform(X_trans)
     assert_array_almost_equal(X, X_trans_inv, decimal=4)
 
+    # make sure new data gets transformed correctly
     X_new = [[+0., 2., 0.5],
              [-1., 1., 0.0],
              [+0., 1., 1.5]]
@@ -450,10 +451,6 @@ def test_min_max_scaler_zero_variance_features():
          [0., 1., -0.1],
          [0., 1., +1.1]]
 
-    X_new = [[+0., 2., 0.5],
-             [-1., 1., 0.0],
-             [+0., 1., 1.5]]
-
     # default params
     scaler = MinMaxScaler()
     X_trans = scaler.fit_transform(X)
@@ -464,6 +461,10 @@ def test_min_max_scaler_zero_variance_features():
     X_trans_inv = scaler.inverse_transform(X_trans)
     assert_array_almost_equal(X, X_trans_inv)
 
+    # make sure new data gets transformed correctly
+    X_new = [[+0., 2., 0.5],
+             [-1., 1., 0.0],
+             [+0., 1., 1.5]]
     X_trans_new = scaler.transform(X_new)
     X_expected_0_1_new = [[+0., 1., 0.500],
                           [-1., 0., 0.083],
@@ -548,10 +549,6 @@ def test_robust_scaler_zero_variance_features():
          [0., 1., -0.1],
          [0., 1., +1.1]]
 
-    X_new = [[+0., 2., 0.5],
-             [-1., 1., 0.0],
-             [+0., 1., 1.5]]
-
     scaler = RobustScaler(interquartile_scale=1.0)
     X_trans = scaler.fit_transform(X)
 
@@ -568,6 +565,10 @@ def test_robust_scaler_zero_variance_features():
     X_trans_inv = scaler.inverse_transform(X_trans)
     assert_array_almost_equal(X, X_trans_inv)
 
+    # make sure new data gets transformed correctly
+    X_new = [[+0., 2., 0.5],
+             [-1., 1., 0.0],
+             [+0., 1., 1.5]]
     X_trans_new = scaler.transform(X_new)
     X_expected_new = [[+0., 1., +0.],
                       [-1., 0., -0.52083],
@@ -582,10 +583,6 @@ def test_maxabs_scaler_zero_variance_features():
          [0., 1., +1.5],
          [0., 0., +0.0]]
 
-    X_new = [[+0., 2., 0.5],
-             [-1., 1., 0.0],
-             [+0., 1., 1.5]]
-
     # default params
     scaler = MaxAbsScaler()
     X_trans = scaler.fit_transform(X)
@@ -597,6 +594,10 @@ def test_maxabs_scaler_zero_variance_features():
     X_trans_inv = scaler.inverse_transform(X_trans)
     assert_array_almost_equal(X, X_trans_inv)
 
+    # make sure new data gets transformed correctly
+    X_new = [[+0., 2., 0.5],
+             [-1., 1., 0.0],
+             [+0., 1., 1.5]]
     X_trans_new = scaler.transform(X_new)
     X_expected_new = [[+0., 2.0, 1.0 / 3.0],
                       [-1., 1.0, 0.0],
