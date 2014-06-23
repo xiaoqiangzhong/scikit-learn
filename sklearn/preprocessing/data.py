@@ -815,6 +815,10 @@ def minmax_scale(X, feature_range=(0, 1), axis=0, with_centering=True,
     This standardization is often used as an alternative to zero mean,
     unit variance scaling.
 
+    Note that if future input exceeds the maximal/minimal values seen
+    during `fit`, the return values of `transform` might lie outside
+    of the specified `feature_range`.
+
     Parameters
     ----------
     feature_range: tuple (min, max), default=(0, 1)
