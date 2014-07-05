@@ -146,7 +146,7 @@ full formula is::
     X_scaled = X_std / (max - min) + min
 
 As with :func:`scale`, the ``preprocessing`` module further provides a
-convenience function function :func:`minmax_scale` for cases where the
+convenience function :func:`minmax_scale` for cases where the
 full functionality of the Transfomer API is not needed.
 
 :class:`MaxAbsScaler` works in a very similar fashion, but scales data so
@@ -175,7 +175,7 @@ Here is how to use the toy data from the previous example with this scaler::
 
 
 As with :func:`scale`, the ``preprocessing`` module further provides a
-convenience function function :func:`maxabs_scale` for cases where the
+convenience function :func:`maxabs_scale` for cases where the
 full functionality of the Transfomer API is not needed.
 
 
