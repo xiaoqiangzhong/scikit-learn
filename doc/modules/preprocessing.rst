@@ -175,7 +175,7 @@ Here is how to use the toy data from the previous example with this scaler::
 
 
 As with :func:`scale`, the ``preprocessing`` module further provides a
-convenience function function :func:`maxabs_scale`  for cases where the
+convenience function function :func:`maxabs_scale` for cases where the
 full functionality of the Transfomer API is not needed.
 
 
@@ -185,15 +185,15 @@ Centering sparse data would destroy the sparseness structure in the data, and
 thus rarely is a sensible thing to do. However, it can make sense to scale
 sparse inputs, especially if features are on different scales.
 
-:class:`MaxAbsScaler`  and :func:`maxabs_scale` were specifically designed
+:class:`MaxAbsScaler` and :func:`maxabs_scale` were specifically designed
 for scaling sparse data, and are the recommended way to go about this.
-However, :func:`scale` and :class:`StandardScaler` can accept ``scipy.sparse``
-matrices  as input, as long as ``with_centering=False`` is explicitly passed
-to the constructor. Otherwise a ``ValueError`` will be raised as
-silently centering would break the sparsity and would often crash the
+However, :func:`scale` and :class:`StandardScaler` can accept
+``scipy.sparse`` matrices  as input, as long as ``with_centering=False``
+is explicitly passed to the constructor. Otherwise a ``ValueError`` will be
+raised as silently centering would break the sparsity and would often crash the
 execution by allocating excessive amounts of memory unintentionally.
-:class:`RobustScaler` cannot be `fit`ted to sparse inputs, but you can use the
-`transform` method on sparse inputs.
+:class:`RobustScaler` cannot be ``fit``ted to sparse inputs, but you can use
+the ``transform`` method on sparse inputs.
 
 Note that the scalers accept both Compressed Sparse Rows and Compressed
 Sparse Columns format (see ``scipy.sparse.csr_matrix`` and
