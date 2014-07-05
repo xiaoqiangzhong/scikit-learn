@@ -146,8 +146,8 @@ full formula is::
     X_scaled = X_std / (max - min) + min
 
 As with :func:`scale`, the ``preprocessing`` module further provides a
-convenience function function :func:`minmax_scale` if you don't want to use
-the `Transformer` API.
+convenience function function :func:`minmax_scale` for cases where the
+full functionality of the Transfomer API is not needed.
 
 :class:`MaxAbsScaler` works in a very similar fashion, but scales data so
 it lies within the range ``[-1, 1]``, and is meant for data
@@ -175,8 +175,8 @@ Here is how to use the toy data from the previous example with this scaler::
 
 
 As with :func:`scale`, the ``preprocessing`` module further provides a
-convenience function function :func:`maxabs_scale` if you don't want to use
-the `Transformer` API.
+convenience function function :func:`maxabs_scale`  for cases where the
+full functionality of the Transfomer API is not needed.
 
 
 Scaling sparse data
