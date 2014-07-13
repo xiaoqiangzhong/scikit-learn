@@ -1,4 +1,4 @@
-import warnings
+import unittest
 import numpy as np
 import numpy.linalg as la
 from scipy import sparse
@@ -14,9 +14,8 @@ from sklearn.utils.testing import assert_raises
 from sklearn.utils.testing import assert_true
 from sklearn.utils.testing import assert_false
 from sklearn.utils.testing import assert_warns
-from sklearn.utils.testing import ignore_warnings
+from sklearn.utils.testing import SkipTest
 
-from sklearn.utils.sparsefuncs import mean_variance_axis
 from sklearn.preprocessing.data import _transform_selected
 from sklearn.preprocessing.data import Binarizer
 from sklearn.preprocessing.data import KernelCenterer
@@ -40,42 +39,25 @@ from sklearn import datasets
 iris = datasets.load_iris()
 
 
-SPARSE_SCALERS = {  # support sparse or dense input
-    'uncentered StandardScaler': partial(StandardScaler, with_centering=False),
-    'MaxAbsScaler': MaxAbsScaler
-}
+class BaseScalerTest(object):
+    ScalerClass = None
+    scaler_function = None
 
-NON_SPARSE_SCALERS = {  # only support dense input
-    'centered StandardScaler': partial(StandardScaler, with_centering=True),
-    'MaxAbsScaler': MaxAbsScaler,
-    'RobustScaler': RobustScaler,
-    'MinMaxScaler[0,1]': partial(MinMaxScaler, feature_range=(0, 1)),
-    'MinMaxScaler[-1,1]': partial(MinMaxScaler, feature_range=(-1, 1)),
-    'MinMaxScaler[-3,5]': partial(MinMaxScaler, feature_range=(-3, 5))
-}
-
-
-ALL_SCALERS = {}
-ALL_SCALERS.update(SPARSE_SCALERS)
-ALL_SCALERS.update(NON_SPARSE_SCALERS)
-
-
-SCALER_FUNCTIONS = {
-    'scale': scale,
-    'robust_scale': robust_scale,
-    'minmax_scale': minmax_scale,
-    'maxabs_scale': maxabs_scale
-}
-
-
-def test_scaler_2d_axis0():
-    """Test robust scaling of 2d array along axis0"""
     rng = np.random.RandomState(0)
     X = rng.randn(4, 5)
     X[:, 0] = 0.0  # first feature is always of zero
 
-    for fn, ScalerClass in ALL_SCALERS.items():
-        scaler = ScalerClass(axis=0)
+    X_int = rng.randint(20, size=(4, 5))
+    X_int[:, 0] = 0  # first feature is always of zero
+
+    X_zero_var = np.array([[0., 1., +0.5],
+                           [0., 1., -0.1],
+                           [0., 1., +1.1]])
+
+    def test_2d_axis0(self):
+        '''Check that scalers work on 2D arrays on axis=1'''
+        X = self.X.copy()
+        scaler = self.ScalerClass(axis=0)
         X_scaled = scaler.fit(X).transform(X, copy=True)
         assert_false(np.any(np.isnan(X_scaled)))
 
@@ -97,14 +79,11 @@ def test_scaler_2d_axis0():
         # Check that X has not been copied
         assert_true(X_scaled is X)
 
-
-def test_scaler_2d_axis1():
-    '''Check that scalers work on 2D arrays on axis=1'''
-    rng = np.random.RandomState(42)
-    X = rng.randn(4, 5)
-    for fn, ScalerClass in ALL_SCALERS.items():
-        scaler = ScalerClass().fit(X)
-        scaler_trans = ScalerClass(axis=1).fit(X.T)
+    def test_2d_axis1(self):
+        '''Check that scalers work on 2D arrays on axis=1'''
+        X = self.X.copy()
+        scaler = self.ScalerClass().fit(X)
+        scaler_trans = self.ScalerClass(axis=1).fit(X.T)
         X_scaled = scaler.transform(X)
         X_scaled_trans = scaler_trans.transform(X.T)
         assert_array_almost_equal(X_scaled.T, X_scaled_trans)
@@ -112,18 +91,19 @@ def test_scaler_2d_axis1():
         X_trans_inv = scaler_trans.inverse_transform(X_scaled_trans)
         assert_array_almost_equal(X_inv.T, X_trans_inv)
 
-    for fn, scale_func in SCALER_FUNCTIONS.items():
-        X_scaled = scale_func(X)
-        X_scaled_trans = scale_func(X.T, axis=1)
+        if self.scaler_function is None:
+            return
+        X = self.X.copy()
+        X_scaled = self.scaler_function(X)
+        X_scaled_trans = self.scaler_function(X.T, axis=1)
         assert_array_almost_equal(X_scaled.T, X_scaled_trans)
 
+    def test_1d(self):
+        '''Check that scalers accept 1D input'''
+        X = np.array([-1, 0.0, 1.6])
+        Xl = [-1, 0.0, 1.6]  # 1D list
 
-def test_scaler_1D():
-    '''Check that scalers accept 1D input'''
-    X = np.array([-1, 0.0, 1.6])
-    Xl = [-1, 0.0, 1.6]  # 1D list
-    for fn, ScalerClass in ALL_SCALERS.items():
-        scaler = ScalerClass()
+        scaler = self.ScalerClass()
         X_trans = scaler.fit_transform(X)
         X_inv = scaler.inverse_transform(X_trans)
         assert_array_almost_equal(X_inv, X)
@@ -137,41 +117,158 @@ def test_scaler_1D():
         Xl_inv = scaler.inverse_transform(Xl_trans.tolist())
         assert_array_almost_equal(X_inv, Xl_inv)
 
-    for fn, scale_func in SCALER_FUNCTIONS.items():
-        scale_func(X)
+        if self.scaler_function is None:
+            return
+        self.scaler_function(X)
 
-
-def test_scale_allzeros():
-    X = np.array([0.0, 0.0, 0.0, 0.0])
-    for fn, ScalerClass in ALL_SCALERS.items():
-        scaler = ScalerClass().fit(X)
+    def test_all_zeros(self):
+        X = np.array([0.0, 0.0, 0.0, 0.0])
+        scaler = self.ScalerClass().fit(X)
         X_scaled = scaler.transform(X)
-        if "MinMaxScaler" in fn:
-            continue
         assert_array_almost_equal(X_scaled, X)
         X_inv = scaler.inverse_transform(X_scaled)
         assert_array_almost_equal(X_inv, X)
 
-    for fn, scale_func in SCALER_FUNCTIONS.items():
-        X_scaled = scale_func(X)
+        if self.scaler_function is None:
+            return
+        X_scaled = self.scaler_function(X)
         assert_array_almost_equal(X_scaled, X)
 
+    def test_center_attribute(self):
+        """Check that the center_ attribute of the Scalers is accessible"""
+        X = [[0., 2.0, +0.5],
+             [0., 0.0, -0.3]]
+        scaler = self.ScalerClass()
+        if not scaler.with_centering:
+            return
+        scaler.fit_transform(X)
+        assert(len(scaler.center_) == 3)
 
-def test_scaler_sparse_data():
-    """Check that the scalers works with sparse inputs."""
-    X = [[0., 1., +0.5, -1],
-         [0., 1., -0.3, -0.5],
-         [0., 1., -1.5, 0],
-         [0., 0., +0.0, -2]]
+    def test_scale_attribute(self):
+        """Check that the scale_ attribute of Scalers is accessible"""
+        X = [[0., 2.0, +0.5],
+             [0., 0.0, -0.3]]
 
-    X_csr = sparse.csr_matrix(X)
-    X_csc = sparse.csc_matrix(X)
+        scaler = self.ScalerClass()
+        scaler.fit_transform(X)
+        assert(len(scaler.scale_) == 3)
 
-    for axis in (0, 1):
-        for fn, ScalerClass in SPARSE_SCALERS.items():
-            scaler = ScalerClass(axis=axis)
-            scaler_csr = ScalerClass(axis=axis)
-            scaler_csc = ScalerClass(axis=axis)
+    def test_sparse_data(self):
+        """Test that sparse matrices result in errors"""
+        # NB: this is overridden in BaseSparseScalerTest
+        X = self.X.copy()
+        X_csr = sparse.csr_matrix(X)
+
+        # some scalers don't accept sparse matrices at all and will throw
+        # a TypeError, while others except them only under certain conditions
+        # and will throw a ValueError if that happens. Thus we test for
+        # BaseException
+        scaler = self.ScalerClass()
+        assert_raises(BaseException, scaler.fit, X_csr)
+        scaler.fit(X)
+        assert_raises(BaseException, scaler.transform, X_csr)
+        X_transformed_csr = sparse.csr_matrix(scaler.transform(X))
+        assert_raises(BaseException, scaler.inverse_transform,
+                      X_transformed_csr)
+
+    def test_sparse_unsupported_format(self):
+        """Check that the Scalers throw on unallowed matrix formats."""
+        X = [[0., 2.0, +0.5],
+             [0., 0.0, -0.3],
+             [0., 4.0, -1.7]]
+        X_dia = sparse.dia_matrix(X)
+
+        scaler = self.ScalerClass()
+        assert_raises(TypeError, scaler.fit, X_dia)
+        scaler.fit(X)
+        did_raise = False
+        try:
+            scaler.transform(X_dia)
+        except TypeError:
+            did_raise = True
+        assert(did_raise)
+
+    def check_copy_argument(self, X):
+        scaler = self.ScalerClass(copy=True).fit(X)
+        X_scaled = scaler.transform(X)
+        assert (X_scaled is not X)
+        X2 = scaler.inverse_transform(X_scaled)
+        assert (X_scaled is not X2)
+
+        scaler = self.ScalerClass(copy=False).fit(X)
+        X_scaled = scaler.transform(X)
+        assert (X_scaled is X)
+        X2 = scaler.inverse_transform(X_scaled)
+        assert (X_scaled is X2)
+
+        scaler = self.ScalerClass(copy=False).fit(X)
+        X_scaled = scaler.transform(X, copy=True)
+        assert (X_scaled is not X)
+        X2 = scaler.inverse_transform(X_scaled, copy=True)
+        assert (X_scaled is not X2)
+
+        scaler = self.ScalerClass(copy=False).fit(X)
+        X_scaled = scaler.transform(X)
+        assert (X_scaled is X)
+
+    def test_copy_argument_dense(self):
+        '''Make sure the scalers respect the 'copy' argument on inputs.'''
+        rng = np.random.RandomState(42)
+        X = rng.randn(4, 5)
+        self.check_copy_argument(X)
+
+    def test_int_handling(self):
+        X = self.X_int.copy()
+
+        scaler = assert_warns(UserWarning, self.ScalerClass().fit, X)
+        X_scaled = assert_warns(UserWarning, scaler.transform, X, copy=True)
+        assert_false(np.any(np.isnan(X_scaled)))
+        X_scaled_back = scaler.inverse_transform(X_scaled)
+        assert_array_almost_equal(X_scaled_back, X)
+
+        try:
+            null_transform = self.ScalerClass(with_centering=False,
+                                              with_scaling=False, copy=True)
+        except TypeError:
+            pass  # some classes can't be initialized with above args
+        else:
+            X_null = assert_warns(UserWarning, null_transform.fit_transform, X)
+            assert_array_equal(X_null, X)
+
+    def test_zero_variance_features(self):
+###        """Check standard scaler on toy data with zero variance features"""
+        X = self.X_zero_var.copy()
+        scaler = self.ScalerClass()
+        X_trans = scaler.fit_transform(X)
+        assert_array_almost_equal(X_trans, self.X_zero_var_expected)
+        X_trans_inv = scaler.inverse_transform(X_trans)
+        assert_array_almost_equal(X, X_trans_inv, decimal=4)
+
+        # scaler fit with zero-variance features 0, 1;
+        # check transform allows for variance
+        X_new = [[+0., 2., 0.5],
+                 [-1., 1., 0.0],
+                 [+0., 1., 1.5]]
+        X_trans_new = scaler.transform(X_new)
+        assert_true(np.ptp(X_trans_new[:, 0]) != 0)
+        assert_true(np.ptp(X_trans_new[:, 1]) != 0)
+
+
+class BaseSparseScalerTest(BaseScalerTest):
+    def test_sparse_data(self):
+        """Check that the scalers works with sparse inputs."""
+        X = [[0., 1., +0.5, -1],
+             [0., 1., -0.3, -0.5],
+             [0., 1., -1.5, 0],
+             [0., 0., +0.0, -2]]
+
+        X_csr = sparse.csr_matrix(X)
+        X_csc = sparse.csc_matrix(X)
+
+        for axis in (0, 1):
+            scaler = self.ScalerClass(axis=axis)
+            scaler_csr = self.ScalerClass(axis=axis)
+            scaler_csc = self.ScalerClass(axis=axis)
             X_trans = scaler.fit_transform(X)
             X_trans_csr = scaler_csr.fit_transform(X_csr)
             X_trans_csc = scaler_csc.fit_transform(X_csc)
@@ -188,169 +285,85 @@ def test_scaler_sparse_data():
             assert_array_almost_equal(X_trans_inv, X_trans_inv_csr.toarray())
             assert_array_almost_equal(X_trans_inv, X_trans_inv_csc.toarray())
 
+    def test_copy_argument_sparse(self):
+        '''Make sure the scalers respect the 'copy' argument on inputs.'''
+        rng = np.random.RandomState(42)
+        X = rng.randn(4, 5)
+        X[0, 0] = 0
+        X = sparse.csr_matrix(X)
+        self.check_copy_argument(X)
 
-def test_scaler_center_property():
-    """Check that the center_ attribute of the Scalers is accessible"""
-    X = [[0., 2.0, +0.5],
-         [0., 0.0, -0.3]]
-    for fn, ScalerClass in ALL_SCALERS.items():
-        scaler = ScalerClass()
-        if not scaler.with_centering:
-            continue
-        scaler.fit_transform(X)
-        assert(len(scaler.center_) == 3)
-
-    scaler = StandardScaler().fit(X)
-    with warnings.catch_warnings(record=True):
-        assert(len(scaler.mean_) == 3)  # deprecated parameter
-
-
-def test_scaler_scale_property():
-    """Check that the scale_ attribute of Scalers is accessible"""
-    X = [[0., 2.0, +0.5],
-         [0., 0.0, -0.3]]
-
-    for fn, ScalerClass in ALL_SCALERS.items():
-        scaler = ScalerClass()
-        scaler.fit_transform(X)
-        assert(len(scaler.scale_) == 3)
-
-    scaler = StandardScaler().fit(X)
-    with warnings.catch_warnings(record=True):
-        assert(len(scaler.std_) == 3)  # deprecated parameter
-
-
-def test_scaler_throw_exceptions_on_unallowed_sparse():
-    """Check that the Scalers throw on unallowed matrix formats."""
-    X = [[0., 2.0, +0.5],
-         [0., 0.0, -0.3],
-         [0., 4.0, -1.7]]
-    X_dia = sparse.dia_matrix(X)
-
-    for fn, ScalerClass in ALL_SCALERS.items():
-        scaler = ScalerClass()
-        assert_raises(TypeError, scaler.fit, X_dia)
-        scaler.fit(X)
-        did_raise = False
-        try:
-            scaler.transform(X_dia)
-        except TypeError:
-            did_raise = True
-        assert(did_raise)
-
-
-def test_scaler_matrix_copy_argument():
-    '''Make sure the scalers respect the 'copy' argument on inputs.'''
-
-    def test_impl(X, ScalerClass):
-        scaler = ScalerClass(copy=True).fit(X)
-        X_scaled = scaler.transform(X)
-        assert (X_scaled is not X)
-        X2 = scaler.inverse_transform(X_scaled)
-        assert (X_scaled is not X2)
-
-        scaler = ScalerClass(copy=False).fit(X)
-        X_scaled = scaler.transform(X)
-        assert (X_scaled is X)
-        X2 = scaler.inverse_transform(X_scaled)
-        assert (X_scaled is X2)
-
-        scaler = ScalerClass(copy=False).fit(X)
-        X_scaled = scaler.transform(X, copy=True)
-        assert (X_scaled is not X)
-        X2 = scaler.inverse_transform(X_scaled, copy=True)
-        assert (X_scaled is not X2)
-
-        scaler = ScalerClass(copy=False).fit(X)
-        X_scaled = scaler.transform(X)
-        assert (X_scaled is X)
-
-    rng = np.random.RandomState(42)
-    X = rng.randn(4, 5)
-    rng = np.random.RandomState(42)
-    for fn, ScalerClass in ALL_SCALERS.items():
-        test_impl(X, ScalerClass)
-
-    X = rng.randn(4, 5)
-    X[0, 0] = 0
-    X_csr = sparse.csr_matrix(X)
-    for fn, ScalerClass in SPARSE_SCALERS.items():
-        test_impl(X, ScalerClass)
-
-
-@ignore_warnings
-def test_scaler_int():
-    '''Test that scaler converts integer input to float
-       (or at least that transform->inverse_transform works as it should)'''
-    rng = np.random.RandomState(42)
-    X = rng.randint(20, size=(4, 5))
-    X[:, 0] = 0  # first feature is always of zero
-    X_csr = sparse.csr_matrix(X)
-    X_csc = sparse.csc_matrix(X)
-
-    for fn, ScalerClass in ALL_SCALERS.items():
-        try:
-            null_transform = ScalerClass(with_centering=False,
-                                         with_scaling=False, copy=True)
-            X_null = null_transform.fit_transform(X)
-            assert_array_equal(X_null, X)
-        except TypeError:
-            pass  # some classes can't be initialized with above args
-
-        with warnings.catch_warnings(record=True):
-            scaler = ScalerClass().fit(X)
-            X_scaled = scaler.transform(X, copy=True)
-        assert_false(np.any(np.isnan(X_scaled)))
-
+    def test_int_handling_sparse(self):
+        X = sparse.csr_matrix(self.X_int)
+        scaler = assert_warns(UserWarning, self.ScalerClass().fit, X)
+        X_scaled = assert_warns(UserWarning, scaler.transform, X, copy=True)
+        assert_false(np.any(np.isnan(X_scaled.data)))
         X_scaled_back = scaler.inverse_transform(X_scaled)
-        assert_array_almost_equal(X_scaled_back, X)
-
-    for fn, ScalerClass in SPARSE_SCALERS.items():
-        with warnings.catch_warnings(record=True):
-            scaler_csr = ScalerClass().fit(X_csr)
-            X_csr_scaled = scaler_csr.transform(X_csr, copy=True)
-        assert_false(np.any(np.isnan(X_csr_scaled.data)))
-
-        with warnings.catch_warnings(record=True):
-            scaler_csc = ScalerClass().fit(X_csc)
-            X_csc_scaled = scaler_csc.transform(X_csc, copy=True)
-        assert_false(np.any(np.isnan(X_csc_scaled.data)))
-
-        X_csr_scaled_back = scaler_csr.inverse_transform(X_csr_scaled)
-        assert_array_almost_equal(X_csr_scaled_back.toarray(), X)
-
-        X_csc_scaled_back = scaler_csc.inverse_transform(X_csc_scaled.tocsc())
-        assert_array_almost_equal(X_csc_scaled_back.toarray(), X)
+        assert_array_almost_equal(X_scaled_back.A, X.A)
 
 
-def test_warning_scaling_integers():
-    """Check warning when scaling integer data"""
-    X = np.array([[1, 2, 0],
-                  [0, 0, 0]], dtype=np.uint8)
+# TODO: test deprecated attributes of StandardScaler:
 
-    for fn, ScalerClass in ALL_SCALERS.items():
-        assert_warns(UserWarning, ScalerClass().fit, X)
+class CenteredStandardScalerTest(unittest.TestCase, BaseScalerTest):
+    ScalerClass = partial(StandardScaler, with_centering=True)
+    scaler_function = staticmethod(scale)
+
+    X_zero_var_expected = [[0., 0.,  0.],
+                           [0., 0., -1.22474487],
+                           [0., 0.,  1.22474487]]
 
 
-def test_nonsparse_scaler_raise_exception_on_sparse():
-    rng = np.random.RandomState(42)
-    X = rng.randn(4, 5)
-    X_csr = sparse.csr_matrix(X)
+class RobustScalerTest(unittest.TestCase, BaseScalerTest):
+    ScalerClass = partial(RobustScaler, interquartile_scale=1.0)
+    scaler_function = staticmethod(partial(robust_scale,
+                                           interquartile_scale=1.0))
 
-    nonsparse = set(ALL_SCALERS.keys()) - set(SPARSE_SCALERS.keys())
-    for fn in nonsparse:
-        scaler = ALL_SCALERS[fn]()
+    # NOTE: what we expect in the third column depends HEAVILY on the method
+    # used to calculate quantiles. The values here were calculated
+    # to fit the quantiles produces by scipy.stats.mstats.mquantiles' default
+    # quantile-method. Calculating quantiles with
+    # scipy.stats.mstats.scoreatquantile
+    # would yield very different results!
+    X_zero_var_expected = [[0., 0., +0.0],
+                           [0., 0., -0.625],
+                           [0., 0., +0.625]]
 
-        # some scalers don't except sparse matrices at all and will throw
-        # a TypeError, while others except them only under certain conditions
-        # and will throw a ValueError if that happens. Thus we test for
-        # BaseException
-        assert_raises(BaseException, scaler.fit, X_csr)
-        scaler.fit(X)
-        assert_raises(BaseException, scaler.transform, X_csr)
-        X_transformed_csr = sparse.csr_matrix(scaler.transform(X))
-        assert_raises(BaseException, scaler.inverse_transform,
-                      X_transformed_csr)
+
+class MinMaxScalerTest(unittest.TestCase, BaseScalerTest):
+    ScalerClass = partial(MinMaxScaler, feature_range=(0, 1))
+    scaler_function = staticmethod(minmax_scale)
+
+    X_zero_var_expected = [[0., 0., 0.5],
+                           [0., 0., 0.],
+                           [0., 0., 1.]]
+
+
+class MinMaxScalerAlternativeRangeTest(unittest.TestCase, BaseScalerTest):
+    ScalerClass = partial(MinMaxScaler, feature_range=(-3, 5))
+
+    def test_all_zeros(self):
+        raise SkipTest
+
+
+class UncenteredStandardScalerTest(unittest.TestCase, BaseSparseScalerTest):
+    ScalerClass = partial(StandardScaler, with_centering=False)
+
+
+class MaxAbsScalerTest(unittest.TestCase, BaseSparseScalerTest):
+    ScalerClass = MaxAbsScaler
+    scaler_function = staticmethod(maxabs_scale)
+
+    X_zero_var_expected = [[0., 1., 0.5 / 1.1],
+                           [0., 1., -0.1 / 1.1],
+                           [0., 1., 1.0]]
+
+
+###        scaler = StandardScaler().fit(X)
+###        with warnings.catch_warnings(record=True):
+###            assert(len(scaler.mean_) == 3)  # deprecated parameter
+###        scaler = StandardScaler().fit(X)
+###        with warnings.catch_warnings(record=True):
+###            assert(len(scaler.std_) == 3)  # deprecated parameter
 
 
 def test_standardscaler_2d_arrays():
@@ -370,31 +383,6 @@ def test_standardscaler_2d_arrays():
     X_scaled = scale(X, axis=1, with_scaling=True)
     assert_array_almost_equal(X_scaled.mean(axis=1), 4 * [0.0])
     assert_array_almost_equal(X_scaled.std(axis=1), 4 * [1.0])
-
-
-def test_standard_scaler_zero_variance_features():
-    """Check standard scaler on toy data with zero variance features"""
-    X = [[0., 1., +0.5],
-         [0., 1., -0.1],
-         [0., 1., +1.1]]
-    scaler = StandardScaler()
-    X_trans = scaler.fit_transform(X)
-    X_expected = [[0., 0.,  0.],
-                  [0., 0., -1.22474487],
-                  [0., 0.,  1.22474487]]
-    assert_array_almost_equal(X_trans, X_expected)
-    X_trans_inv = scaler.inverse_transform(X_trans)
-    assert_array_almost_equal(X, X_trans_inv, decimal=4)
-
-    # make sure new data gets transformed correctly
-    X_new = [[+0., 2., 0.5],
-             [-1., 1., 0.0],
-             [+0., 1., 1.5]]
-    X_trans_new = scaler.transform(X_new)
-    X_expected_new = [[+0., 1.,  0.],
-                      [-1., 0., -1.02062073],
-                      [+0., 0.,  2.04124145]]
-    assert_array_almost_equal(X_trans_new, X_expected_new, decimal=4)
 
 
 def test_min_max_scaler_iris():
