@@ -5,6 +5,7 @@ import sys
 import traceback
 import inspect
 import pickle
+import re
 
 import numpy as np
 from scipy import sparse
@@ -105,6 +106,19 @@ def _is_32bit():
     return struct.calcsize('P') * 8 == 32
 
 
+UNFITTED_REGEXP = r'\bfit'  # the message should include the word fit*
+
+
+def assert_regexp_if_raises(exc_class, expected_regexp, callable_obj,
+                            *args, **kwargs):
+    try:
+        return callable_obj(*args, **kwargs)
+    except exc_class, exc_value:
+        assert re.search(expected_regexp, str(exc_value)), (
+            'Exception was raised but "{}" did not match '
+            '{!r}'.format(exc_value, re.compile(expected_regexp).pattern))
+
+
 def check_regressors_classifiers_sparse_data(name, Estimator):
     rng = np.random.RandomState(0)
     X = rng.rand(40, 10)
@@ -142,6 +156,16 @@ def check_transformer(name, Transformer):
     X -= X.min()
     _check_transformer(name, Transformer, X, y)
     _check_transformer(name, Transformer, X.tolist(), y.tolist())
+
+
+def check_transformer_unfitted(name, Transformer):
+    X, y = _boston_subset()
+    with warnings.catch_warnings(record=True):
+        transformer = Transformer()
+    if not hasattr(transformer, 'transform'):
+        return
+    assert_regexp_if_raises(Exception, UNFITTED_REGEXP,
+                            transformer.transform, X)
 
 
 def check_transformer_data_not_an_array(name, Transformer):
@@ -502,6 +526,20 @@ def check_classifiers_train(name, Classifier):
             assert_raises(ValueError, classifier.predict_proba, X.T)
 
 
+def check_classifiers_unfitted(name, Classifier):
+    X, y = _boston_subset()
+    with warnings.catch_warnings(record=True):
+        classifier = Classifier()
+    assert_regexp_if_raises(Exception, UNFITTED_REGEXP,
+                            classifier.predict, X)
+    if hasattr(classifier, 'decision_function'):
+        assert_regexp_if_raises(Exception, UNFITTED_REGEXP,
+                                classifier.decision_function, X)
+    if hasattr(classifier, 'predict_proba'):
+        assert_regexp_if_raises(Exception, UNFITTED_REGEXP,
+                                classifier.predict_proba, X)
+
+
 def check_classifiers_input_shapes(name, Classifier):
     iris = load_iris()
     X, y = iris.data, iris.target
@@ -681,6 +719,13 @@ def check_regressors_pickle(name, Regressor):
     unpickled_regressor = pickle.loads(pickled_regressor)
     pickled_y_pred = unpickled_regressor.predict(X)
     assert_array_almost_equal(pickled_y_pred, y_pred)
+
+
+def check_regressors_unfitted(name, Regressor):
+    X, y = _boston_subset()
+    with warnings.catch_warnings(record=True):
+        regressor = Regressor()
+    assert_regexp_if_raises(Exception, UNFITTED_REGEXP, regressor.predict, X)
 
 
 def check_class_weight_classifiers(name, Classifier):

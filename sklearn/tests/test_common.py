@@ -37,12 +37,14 @@ from sklearn.utils.estimator_checks import (
     check_regressors_int,
     check_regressors_train,
     check_regressors_pickle,
+    check_regressors_unfitted,
     check_transformer_sparse_data,
     check_transformer_pickle,
     check_estimators_nan_inf,
     check_classifiers_one_label,
     check_classifiers_train,
     check_classifiers_classes,
+    check_classifiers_unfitted,
     check_classifiers_input_shapes,
     check_classifiers_pickle,
     check_class_weight_classifiers,
@@ -56,6 +58,7 @@ from sklearn.utils.estimator_checks import (
     check_regressor_data_not_an_array,
     check_transformer_data_not_an_array,
     check_transformer_n_iter,
+    check_transformer_unfitted,
     check_non_transformer_estimators_n_iter,
     CROSS_DECOMPOSITION)
 
@@ -108,6 +111,7 @@ def test_transformers():
         if name not in ['AdditiveChi2Sampler', 'Binarizer', 'Normalizer']:
             # basic tests
             yield check_transformer, name, Transformer
+        yield check_transformer_unfitted, name, Transformer
 
 
 def test_estimators_nan_inf():
@@ -145,6 +149,7 @@ def test_classifiers():
         # test classifiers trained on a single label always return this label
         yield check_classifiers_one_label, name, Classifier
         yield check_classifiers_classes, name, Classifier
+        yield check_classifiers_unfitted, name, Classifier
         yield check_classifiers_pickle, name, Classifier
         # basic consistency testing
         yield check_classifiers_train, name, Classifier
@@ -165,6 +170,7 @@ def test_regressors():
     for name, Regressor in regressors:
         # basic testing
         yield check_regressors_train, name, Regressor
+        yield check_regressors_unfitted, name, Regressor
         yield check_regressor_data_not_an_array, name, Regressor
         # Test that estimators can be pickled, and once pickled
         # give the same answer as before.
