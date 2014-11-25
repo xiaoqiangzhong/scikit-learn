@@ -253,19 +253,25 @@ def make_pipeline(*steps):
     return Pipeline(_name_estimators(steps))
 
 
-def _fit_one_transformer(transformer, X, y):
+def _fit_one_transformer(transformer, X, y, field):
+    if field is not None:
+        X = X[field]
     return transformer.fit(X, y)
 
 
-def _transform_one(transformer, name, X, transformer_weights):
+def _transform_one(transformer, name, X, transformer_weights, field):
+    if field is not None:
+        X = X[field]
     if transformer_weights is not None and name in transformer_weights:
         # if we have a weight for this transformer, muliply output
         return transformer.transform(X) * transformer_weights[name]
     return transformer.transform(X)
 
 
-def _fit_transform_one(transformer, name, X, y, transformer_weights,
+def _fit_transform_one(transformer, name, X, y, transformer_weights, field,
                        **fit_params):
+    if field is not None:
+        X = X[field]
     if transformer_weights is not None and name in transformer_weights:
         # if we have a weight for this transformer, muliply output
         if hasattr(transformer, 'fit_transform'):
@@ -303,10 +309,12 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
         Keys are transformer names, values the weights.
 
     """
-    def __init__(self, transformer_list, n_jobs=1, transformer_weights=None):
+    def __init__(self, transformer_list, n_jobs=1, transformer_weights=None,
+                 fields=None):
         self.transformer_list = transformer_list
         self.n_jobs = n_jobs
         self.transformer_weights = transformer_weights
+        self.fields = fields
 
     def get_feature_names(self):
         """Get feature names from all transformers.
@@ -333,9 +341,12 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
         X : array-like or sparse matrix, shape (n_samples, n_features)
             Input data, used to fit transformers.
         """
+        fields = self._check_fields()
+        self.fields_ = fields
+
         transformers = Parallel(n_jobs=self.n_jobs)(
-            delayed(_fit_one_transformer)(trans, X, y)
-            for name, trans in self.transformer_list)
+            delayed(_fit_one_transformer)(trans, X, y, field)
+            for (name, trans), field in zip(self.transformer_list, fields))
         self._update_transformer_list(transformers)
         return self
 
@@ -354,10 +365,13 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
             hstack of results of transformers. sum_n_components is the
             sum of n_components (output dimension) over transformers.
         """
+        fields = self._check_fields()
+        self.fields_ = fields
         result = Parallel(n_jobs=self.n_jobs)(
             delayed(_fit_transform_one)(trans, name, X, y,
-                                        self.transformer_weights, **fit_params)
-            for name, trans in self.transformer_list)
+                                        self.transformer_weights, field,
+                                        **fit_params)
+            for (name, trans), field in zip(self.transformer_list, fields))
 
         Xs, transformers = zip(*result)
         self._update_transformer_list(transformers)
@@ -382,8 +396,9 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
             sum of n_components (output dimension) over transformers.
         """
         Xs = Parallel(n_jobs=self.n_jobs)(
-            delayed(_transform_one)(trans, name, X, self.transformer_weights)
-            for name, trans in self.transformer_list)
+            delayed(_transform_one)(trans, name, X, self.transformer_weights,
+                                    field)
+            for (name, trans), field in zip(self.transformer_list, self.fields_))
         if any(sparse.issparse(f) for f in Xs):
             Xs = sparse.hstack(Xs).tocsr()
         else:
@@ -405,6 +420,17 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
             (name, new)
             for ((name, old), new) in zip(self.transformer_list, transformers)
         ]
+
+    def _check_fields(self):
+        if self.fields is not None:
+            fields = self.fields
+            if len(fields) != len(self.transformer_list):
+                raise ValueError("Length of transformer list %d does not match"
+                                 " length of fields %d" % (len(self.transformer_list),
+                                                           len(fields)))
+        else:
+            fields = [None for x in self.transformer_list]
+        return fields
 
 
 # XXX it would be nice to have a keyword-only n_jobs argument to this function,
