@@ -308,6 +308,23 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
         Multiplicative weights for features per transformer.
         Keys are transformer names, values the weights.
 
+    fields : list, optional
+        If given needs to be of same length as transformer list.
+        The i-th transformer will receive X[fields[i]]. This allows to select a
+        subset of featues to be processed by each transformer. If None, all
+        features are passed on.
+
+    Examples
+    --------
+    >>> from sklearn.preprocessing import Normalizer
+    >>> union = FeatureUnion([("norm1", Normalizer(norm='l1')),  \
+                              ("norm2", Normalizer(norm='l1'))], \
+                             fields=['subset1', 'subset2'])
+    >>> X = {'subset1': [[0., 1.], [2., 2.]], 'subset2': [[1., 1.], [0., 1.]]}
+    >>> union.fit_transform(X)    # doctest: +NORMALIZE_WHITESPACE
+    array([[ 0. ,  1. ,  0.5,  0.5],
+           [ 0.5,  0.5,  0. ,  1. ]])
+
     """
     def __init__(self, transformer_list, n_jobs=1, transformer_weights=None,
                  fields=None):
@@ -446,7 +463,7 @@ def make_union(*transformers):
     --------
     >>> from sklearn.decomposition import PCA, TruncatedSVD
     >>> make_union(PCA(), TruncatedSVD())    # doctest: +NORMALIZE_WHITESPACE
-    FeatureUnion(n_jobs=1,
+    FeatureUnion(fields=None, n_jobs=1,
                  transformer_list=[('pca', PCA(copy=True, n_components=None,
                                                whiten=False)),
                                    ('truncatedsvd',
