@@ -24,6 +24,7 @@ from ..utils.sparsetools import connected_components
 from . import _hierarchical
 from ._feature_agglomeration import AgglomerationTransform
 from ..utils.fast_dict import IntFloatDict
+from ..utils.fixes import astype
 
 if sys.version_info[0] > 2:
     xrange = range
@@ -43,8 +44,8 @@ def _fix_connectivity(X, connectivity, n_components=None,
         - completes it if necessary
     """
     n_samples = X.shape[0]
-    if (connectivity.shape[0] != n_samples or
-        connectivity.shape[1] != n_samples):
+    if connectivity.shape[0] != n_samples or \
+       connectivity.shape[1] != n_samples:
         raise ValueError('Wrong shape for connectivity matrix: %s '
                          'when X is %s' % (connectivity.shape, X.shape))
 
@@ -180,6 +181,8 @@ def ward_tree(X, connectivity=None, n_components=None, n_clusters=None):
         row = [i for i in row if i < ind]
         coord_row.extend(len(row) * [ind, ])
         coord_col.extend(row)
+
+    del connectivity
 
     coord_row = np.array(coord_row, dtype=np.intp, order='C')
     coord_col = np.array(coord_col, dtype=np.intp, order='C')
@@ -389,17 +392,22 @@ def linkage_tree(X, connectivity=None, n_components=None,
     A = np.empty(n_nodes, dtype=object)
     inertia = list()
 
-    # XXX: can we avoid switching to lil
-    connectivity = connectivity.tolil()
+    # XXX: can we avoid switching to csr
+    connectivity = connectivity.tocsr().astype(np.float64)
+    indices = astype(connectivity.indices, dtype=np.intp, copy=False)
     # We are storing the graph in a list of IntFloatDict
-    for ind, (data, row) in enumerate(zip(connectivity.data,
-                                          connectivity.rows)):
-        A[ind] = IntFloatDict(np.asarray(row, dtype=np.intp),
-                              np.asarray(data, dtype=np.float64))
+    for ind, (start, stop) in enumerate(zip(connectivity.indptr,
+                                            connectivity.indptr[1:])):
+        row = indices[start:stop]
+        data = connectivity.data[start:stop]
+        A[ind] = IntFloatDict(row, data)
+
         # We keep only the upper triangular for the heap
         # Generator expressions are faster than arrays on the following
+        mask = row < ind
         inertia.extend(_hierarchical.WeightedEdge(d, ind, r)
-            for r, d in zip(row, data) if r < ind)
+                       for r, d in zip(row[mask],
+                                       data[mask]))
     del connectivity
 
     heapify(inertia)
