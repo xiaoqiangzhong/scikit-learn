@@ -11,7 +11,7 @@ from .base import KNeighborsMixin, RadiusNeighborsMixin
 from ..base import BaseEstimator
 from ..utils.validation import check_array
 from ..utils import check_random_state
-from ..metrics.pairwise import pairwise_distances
+from ..metrics.pairwise import pairwise_distances, paired_distances
 
 from ..random_projection import GaussianRandomProjection
 
@@ -227,6 +227,43 @@ class LSHForest(BaseEstimator, KNeighborsMixin, RadiusNeighborsMixin):
         distance_positions = np.argsort(distances)
         return distance_positions, distances[distance_positions]
 
+    def _compute_distances_vectorized(self, X, n_candidates, candidate_idx,
+                                      n_neighbors=None):
+        """Compute distances between each query and candidate
+
+        Parameters
+        ----------
+        X : array or CSR, shape (n_samples, n_features)
+            The queries
+        n_candidates : array, shape (n_samples,)
+            The number of candidates for each query
+        candidate_idx : array, shape (sum(n_candidates),)
+            The index in ``_fit_X`` for each candidate.
+        n_neighbors : int, optional
+            The number of neighbors to extract per query.
+            If provided, all n_candidates must be at least this great.
+
+        Returns
+        -------
+        ordered_candidate_idx : array, shape (sum(n_candidates),) \
+                or (n_samples, n_neighbors)
+            candidate_idx sorted by query and distance
+        distances : array, shape (sum(n_candidates),) \
+                or (n_samples, n_neighbors)
+            Corresponding distances.
+        """
+        X_idx = np.repeat(np.arange(X.shape[0]), n_candidates)
+        X_repeated = X[X_idx]
+        candidates = self._fit_X[candidate_idx]
+        distances = paired_distances(X_repeated, candidates, metric='cosine')
+        order = np.lexsort([distances, X_idx])
+
+        if n_neighbors:
+            idx_offset = np.cumsum(np.hstack((0, n_candidates[:-1])))
+            n_neighbor_idx = (np.arange(n_neighbors) + idx_offset[:, None])
+            order = order[n_neighbor_idx]
+        return candidate_idx[order], distances[order]
+
     def _generate_masks(self):
         """Creates left and right masks for all hash lengths."""
         tri_size = MAX_HASH_SIZE + 1
@@ -237,7 +274,7 @@ class LSHForest(BaseEstimator, KNeighborsMixin, RadiusNeighborsMixin):
         self._left_mask = np.packbits(left_mask).view(dtype=HASH_DTYPE)
         self._right_mask = np.packbits(right_mask).view(dtype=HASH_DTYPE)
 
-    def _get_candidates(self, query, max_depth, bin_queries, n_neighbors):
+    def _get_candidates(self, max_depth, bin_queries, n_neighbors):
         """Performs the Synchronous ascending phase.
 
         Returns an array of candidates, their distance ranks and
@@ -262,7 +299,7 @@ class LSHForest(BaseEstimator, KNeighborsMixin, RadiusNeighborsMixin):
             max_depth = max_depth - 1
             candidate_set.update(candidates)
 
-        candidates = np.asarray(list(candidate_set))
+        candidates = np.asarray(list(candidate_set), dtype=int)
         # For insufficient candidates, candidates are filled.
         # Candidates are filled from unselected indices uniformly.
         if candidates.shape[0] < n_neighbors:
@@ -276,11 +313,7 @@ class LSHForest(BaseEstimator, KNeighborsMixin, RadiusNeighborsMixin):
             to_fill = n_neighbors - candidates.shape[0]
             candidates = np.concatenate((candidates, remaining[:to_fill]))
 
-        ranks, distances = self._compute_distances(query,
-                                                   candidates.astype(int))
-
-        return (candidates[ranks[:n_neighbors]],
-                distances[:n_neighbors])
+        return candidates
 
     def _get_radius_neighbors(self, query, max_depth, bin_queries, radius):
         """Finds radius neighbors from the candidates obtained.
@@ -420,12 +453,18 @@ class LSHForest(BaseEstimator, KNeighborsMixin, RadiusNeighborsMixin):
 
         neighbors, distances = [], []
         bin_queries, max_depth = self._query(X)
+        n_candidates = np.empty(X.shape[0], dtype=int)
+        all_candidates = []
         for i in range(X.shape[0]):
-            neighs, dists = self._get_candidates(X[i], max_depth[i],
-                                                 bin_queries[i],
-                                                 n_neighbors)
-            neighbors.append(neighs)
-            distances.append(dists)
+            candidates = self._get_candidates(max_depth[i],
+                                              bin_queries[i],
+                                              n_neighbors)
+            n_candidates[i] = len(candidates)
+            all_candidates.append(candidates)
+
+        all_candidates = np.concatenate(all_candidates)
+        neighbors, distances = self._compute_distances_vectorized(
+            X, n_candidates, all_candidates, n_neighbors)
 
         if return_distance:
             return np.array(distances), np.array(neighbors)
