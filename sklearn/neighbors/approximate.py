@@ -2,10 +2,12 @@
 # Author: Maheshakya Wijewardena <maheshakya.10@cse.mrt.ac.lk>
 #         Joel Nothman <joel.nothman@gmail.com>
 
-import numpy as np
 import warnings
+import array
 
+import numpy as np
 from scipy import sparse
+from scipy.sparse import csr_matrix
 
 from .base import KNeighborsMixin, RadiusNeighborsMixin
 from ..base import BaseEstimator
@@ -237,50 +239,84 @@ class LSHForest(BaseEstimator, KNeighborsMixin, RadiusNeighborsMixin):
         self._left_mask = np.packbits(left_mask).view(dtype=HASH_DTYPE)
         self._right_mask = np.packbits(right_mask).view(dtype=HASH_DTYPE)
 
-    def _get_candidates(self, query, max_depth, bin_queries, n_neighbors):
+    def _get_candidates(self, X, max_depth, bin_X, n_neighbors):
         """Performs the Synchronous ascending phase.
 
         Returns an array of candidates, their distance ranks and
         distances.
         """
-        index_size = self._fit_X.shape[0]
-        candidates = []
-        candidate_set = set()
+        n_indexed = self._fit_X.shape[0]
+        n_queries = X.shape[0]
         min_candidates = self.n_candidates * self.n_estimators
-        while (max_depth > self.min_hash_match and
-               (len(candidates) < min_candidates or
-                len(candidate_set) < n_neighbors)):
 
-            left_mask = self._left_mask[max_depth]
-            right_mask = self._right_mask[max_depth]
+        # Use sparse matrix to track unique candidates
+        # candidates[i, j] is number of times candidate j found for query i
+        # XXX: try using LIL for faster insertion
+        candidates = csr_matrix((n_queries, n_indexed))
+        for depth in range(np.max(max_depth), self.min_hash_match - 1, -1):
+            active = ((np.diff(candidates.indptr) < n_neighbors) |
+                      (np.squeeze(candidates.sum(axis=1).A) < min_candidates))
+            if not np.any(active):
+                break
+            active = np.flatnonzero(active & (max_depth >= depth))
+            if len(active) == 0:
+                continue
+            left_mask = self._left_mask[depth]
+            right_mask = self._right_mask[depth]
+
             for i in range(self.n_estimators):
                 start, stop = _find_matching_indices(self.trees_[i],
-                                                     bin_queries[i],
+                                                     bin_X[active, i],
                                                      left_mask, right_mask)
-                candidates.extend(
-                    self.original_indices_[i][start:stop])
-            max_depth = max_depth - 1
-            candidate_set.update(candidates)
+                new_indptr = np.zeros(n_queries + 1)
+                new_indptr[1:][active] = stop - start
+                new_indptr = np.cumsum(new_indptr)
+                idx = np.concatenate([np.arange(query_start, query_stop)
+                                      for query_start, query_stop
+                                      in zip(start, stop)])
+                new_indices = np.take(self.original_indices_[i], idx,
+                                      mode='clip')
+                new_candidates = csr_matrix((np.ones(len(new_indices)),
+                                             new_indices, new_indptr),
+                                            shape=candidates.shape)
+                candidates = candidates + new_candidates
 
-        candidates = np.asarray(list(candidate_set))
-        # For insufficient candidates, candidates are filled.
-        # Candidates are filled from unselected indices uniformly.
-        if candidates.shape[0] < n_neighbors:
+        need_fillers = np.maximum(0, n_neighbors - np.diff(candidates.indptr))
+        if np.any(need_fillers):
+            # For insufficient candidates, candidates are filled
+            # from first unselected indices
             warnings.warn(
                 "Number of candidates is not sufficient to retrieve"
                 " %i neighbors with"
                 " min_hash_match = %i. Candidates are filled up"
                 " uniformly from unselected"
                 " indices." % (n_neighbors, self.min_hash_match))
-            remaining = np.setdiff1d(np.arange(0, index_size), candidates)
-            to_fill = n_neighbors - candidates.shape[0]
-            candidates = np.concatenate((candidates, remaining[:to_fill]))
 
-        ranks, distances = self._compute_distances(query,
-                                                   candidates.astype(int))
+            all_idx = np.arange(0, n_indexed)
+            filler_indices = array.array('i')
+            for j in np.flatnonzero(need_fillers):
+                j_start = candidates.indptr[j]
+                j_stop = candidates.indptr[j + 1]
+                j_candidates = candidates.indices[j_start:j_stop]
+                remaining = np.setdiff1d(all_idx, j_candidates)
+                filler_indices.extend(remaining[:need_fillers[j]])
+            filler_indptr = np.cumsum(np.hstack([0, need_fillers]))
+            fillers = csr_matrix((np.ones(len(filler_indices)), filler_indices,
+                                  filler_indptr), shape=candidates.shape)
+            candidates = candidates + fillers
 
-        return (candidates[ranks[:n_neighbors]],
-                distances[:n_neighbors])
+        all_neighbors = []
+        all_distances = []
+        for j, query in enumerate(X):
+            j_start = candidates.indptr[j]
+            j_stop = candidates.indptr[j + 1]
+            j_candidates = candidates.indices[j_start:j_stop]
+            ranks, distances = self._compute_distances(query,
+                                                       j_candidates)
+            all_neighbors.append(j_candidates[ranks[:n_neighbors]])
+            all_distances.append(distances[:n_neighbors])
+
+        return all_neighbors, all_distances
 
     def _get_radius_neighbors(self, query, max_depth, bin_queries, radius):
         """Finds radius neighbors from the candidates obtained.
@@ -420,12 +456,9 @@ class LSHForest(BaseEstimator, KNeighborsMixin, RadiusNeighborsMixin):
 
         neighbors, distances = [], []
         bin_queries, max_depth = self._query(X)
-        for i in range(X.shape[0]):
-            neighs, dists = self._get_candidates(X[i], max_depth[i],
-                                                 bin_queries[i],
-                                                 n_neighbors)
-            neighbors.append(neighs)
-            distances.append(dists)
+        neighs, dists = self._get_candidates(X, max_depth,
+                                             bin_queries,
+                                             n_neighbors)
 
         if return_distance:
             return np.array(distances), np.array(neighbors)
