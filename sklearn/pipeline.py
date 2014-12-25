@@ -292,8 +292,9 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
     """Concatenates results of multiple transformer objects.
 
     This estimator applies a list of transformer objects in parallel to the
-    input data, then concatenates the results. This is useful to combine
-    several feature extraction mechanisms into a single transformer.
+    input data, or each to a different field of the input, then concatenates
+    the results. This is useful to combine several feature extraction
+    mechanisms into a single transformer.
 
     Parameters
     ----------
