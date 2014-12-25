@@ -416,7 +416,8 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
         Xs = Parallel(n_jobs=self.n_jobs)(
             delayed(_transform_one)(trans, name, X, self.transformer_weights,
                                     field)
-            for (name, trans), field in zip(self.transformer_list, self.fields_))
+            for (name, trans), field in zip(self.transformer_list,
+                                            self.fields_))
         if any(sparse.issparse(f) for f in Xs):
             Xs = sparse.hstack(Xs).tocsr()
         else:
@@ -444,8 +445,8 @@ class FeatureUnion(BaseEstimator, TransformerMixin):
             fields = self.fields
             if len(fields) != len(self.transformer_list):
                 raise ValueError("Length of transformer list %d does not match"
-                                 " length of fields %d" % (len(self.transformer_list),
-                                                           len(fields)))
+                                 " length of fields %d" %
+                                 (len(self.transformer_list), len(fields)))
         else:
             fields = [None for x in self.transformer_list]
         return fields
