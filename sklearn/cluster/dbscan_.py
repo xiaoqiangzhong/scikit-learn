@@ -135,7 +135,8 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
                                           directed=False)
     labels[core_samples] = core_labels
 
-    # assign arbitrary core label to peripheries
+    # assign first core label to peripheries
+    neighborhoods.sort_indices()  # ensure scanning order
     peripheral = np.flatnonzero((~core_mask) &
                                 (np.diff(neighborhoods.indptr) != 0))
     core_in_radius = neighborhoods.indices[neighborhoods.indptr[peripheral]]
