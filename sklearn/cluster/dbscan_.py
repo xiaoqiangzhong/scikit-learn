@@ -9,9 +9,9 @@ DBSCAN: Density-Based Spatial Clustering of Applications with Noise
 # License: BSD 3 clause
 
 import numpy as np
+from scipy.sparse.csgraph import connected_components
 
 from ..base import BaseEstimator, ClusterMixin
-from ..metrics import pairwise_distances
 from ..utils import check_random_state, check_array, check_consistent_length
 from ..neighbors import NearestNeighbors
 
@@ -100,57 +100,48 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
 
     # Calculate neighborhood for all samples. This leaves the original point
     # in, which needs to be considered later (i.e. point i is in the
-    # neighborhood of point i. While True, its useless information)
-    if metric == 'precomputed':
-        D = pairwise_distances(X, metric=metric)
-        neighborhoods = [np.where(x <= eps)[0] for x in D]
-    else:
-        neighbors_model = NearestNeighbors(radius=eps, algorithm=algorithm,
-                                           leaf_size=leaf_size,
-                                           metric=metric, p=p)
-        neighbors_model.fit(X)
-        neighborhoods = neighbors_model.radius_neighbors(X, eps,
-                                                         return_distance=False)
-        neighborhoods = np.array(neighborhoods)
+    # neighborhood of point i.)
+    neighbors_model = NearestNeighbors(radius=eps, algorithm=algorithm,
+                                       leaf_size=leaf_size,
+                                       metric=metric, p=p)
+    neighbors_model.fit(X)
+    neighborhoods = neighbors_model.radius_neighbors_graph(X, eps,
+                                                           mode='distance')
+
     if sample_weight is None:
-        n_neighbors = np.array([len(neighbors) for neighbors in neighborhoods])
+        n_neighbors = np.diff(neighborhoods.indptr)
     else:
-        n_neighbors = np.array([np.sum(sample_weight[neighbors])
-                                for neighbors in neighborhoods])
+        weighted = neighborhoods.copy()
+        weighted.data = sample_weight.take(weighted.indices)
+        n_neighbors = np.squeeze(np.asarray(weighted.sum(axis=1)))
 
     # Initially, all samples are noise.
     labels = -np.ones(X.shape[0], dtype=np.int)
 
     # A list of all core samples found.
-    core_samples = np.flatnonzero(n_neighbors > min_samples)
-    index_order = core_samples[random_state.permutation(core_samples.shape[0])]
+    core_mask = n_neighbors > min_samples
+    core_samples = np.flatnonzero(core_mask)
+    if len(core_samples) == 0:
+        return core_samples, labels
 
-    # label_num is the label given to the new cluster
-    label_num = 0
+    order = random_state.permutation(core_samples.shape[0])
+    core_samples = core_samples[order]
 
-    # Look at all samples and determine if they are core.
-    # If they are then build a new cluster from them.
-    for index in index_order:
-        # Already classified
-        if labels[index] != -1:
-            continue
+    # Only care about core samples in neighborhood
+    neighborhoods = neighborhoods[:, core_samples]
 
-        labels[index] = label_num
+    # assign labels to connected cores
+    _, core_labels = connected_components(neighborhoods[core_samples],
+                                          directed=False)
+    labels[core_samples] = core_labels
 
-        # candidates for new core samples in the cluster.
-        candidates = [index]
-        while len(candidates) > 0:
-            cand_neighbors = np.concatenate(np.take(neighborhoods, candidates,
-                                                    axis=0).tolist())
-            cand_neighbors = np.unique(cand_neighbors)
-            noise = cand_neighbors[labels.take(cand_neighbors) == -1]
-            labels[noise] = label_num
-            # A candidate is a core point in the current cluster that has
-            # not yet been used to expand the current cluster.
-            candidates = np.intersect1d(noise, core_samples)
-        # Current cluster finished.
-        # Next core point found will start a new cluster.
-        label_num += 1
+    # assign arbitrary core label to peripheries
+    peripheral = np.flatnonzero((~core_mask) &
+                                (np.diff(neighborhoods.indptr) != 0))
+    core_in_radius = neighborhoods.indices[neighborhoods.indptr[peripheral]]
+    labels[peripheral] = core_labels[core_in_radius]
+
+    core_samples.sort()
     return core_samples, labels
 
 
