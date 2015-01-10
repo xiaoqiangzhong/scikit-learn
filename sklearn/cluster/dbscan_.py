@@ -16,7 +16,8 @@ from ..neighbors import NearestNeighbors
 
 
 def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
-           algorithm='auto', leaf_size=30, p=2, random_state=None):
+           algorithm='auto', leaf_size=30, p=2, sample_weight=None,
+           random_state=None):
     """Perform DBSCAN clustering from vector array or distance matrix.
 
     Parameters
@@ -82,7 +83,7 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
     if not eps > 0.0:
         raise ValueError("eps must be positive.")
 
-    X = np.asarray(X)
+    X = np.asarray(X, accept_sparse='csr')
     n = X.shape[0]
 
     # If index order not given, create random order.
@@ -131,8 +132,13 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
             index_neighborhood = neighbors_model.radius_neighbors(
                 X[index], eps, return_distance=False)[0]
 
+        if sample_weight is None:
+            n_neighbors = len(index_neighborhood)
+        else:
+            n_neighbors = sample_weight[index_neighborhood].sum()
+
         # Too few samples to be core
-        if len(index_neighborhood) < min_samples:
+        if n_neighbors < min_samples:
             continue
 
         core_samples.append(index)
@@ -161,8 +167,13 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
                     else:
                         n_neighborhood = neighbors_model.radius_neighbors(
                             X[neighbor], eps, return_distance=False)[0]
+
                     # check if its a core point as well
-                    if len(n_neighborhood) >= min_samples:
+                    if sample_weight is None:
+                        n_neighbors = len(n_neighborhood)
+                    else:
+                        n_neighbors = sample_weight[n_neighborhood].sum()
+                    if n_neighbors >= min_samples:
                         # is new core point
                         new_candidates.append(neighbor)
                         core_samples.append(neighbor)
