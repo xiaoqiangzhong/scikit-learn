@@ -94,7 +94,7 @@ class freeze_model(BaseEstimatorWrapper):
     def clone(self):
         return type(self)(copy.deepcopy(self._estimator))
 
-    def fit(self):
+    def fit(self, *args, **kwargs):
         return self
 
     def fit_transform(self, X, *args, **kwargs):
