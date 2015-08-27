@@ -12,6 +12,7 @@ DBSCAN: Density-Based Spatial Clustering of Applications with Noise
 import warnings
 
 import numpy as np
+from scipy import sparse
 
 from ..base import BaseEstimator, ClusterMixin
 from ..metrics import pairwise_distances
@@ -49,7 +50,8 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
         the options allowed by metrics.pairwise.pairwise_distances for its
         metric parameter.
         If metric is "precomputed", X is assumed to be a distance matrix and
-        must be square.
+        must be square. X may be a sparse matrix (CSR preferred) in which case
+        only "nonzero" elements may be considered neighbors for DBSCAN.
 
     algorithm : {'auto', 'ball_tree', 'kd_tree', 'brute'}, optional
         The algorithm to be used by the NearestNeighbors module
@@ -112,27 +114,36 @@ def dbscan(X, eps=0.5, min_samples=5, metric='minkowski',
         sample_weight = np.asarray(sample_weight)
         check_consistent_length(X, sample_weight)
 
-    # Calculate neighborhood for all samples. This leaves the original point
-    # in, which needs to be considered later (i.e. point i is in the
-    # neighborhood of point i. While True, its useless information)
+    # Calculate neighborhood for all samples. This excludes the query sample,
+    # but its weight is incorporated into n_neighbors below.
     if metric == 'precomputed':
         D = pairwise_distances(X, metric=metric)
         neighborhoods = np.empty(X.shape[0], dtype=object)
-        neighborhoods[:] = [np.where(x <= eps)[0] for x in D]
+        if sparse.issparse(D):
+            D_mask = D.data <= eps
+            masked_indices = D.indices.astype(np.intp)[D_mask]
+            masked_indptr = np.cumsum(D_mask)[D.indptr[1:-1] - 1]
+            neighborhoods[:] = np.split(masked_indices, masked_indptr)
+        else:
+            neighborhoods[:] = [np.setdiff1d(np.where(x <= eps)[0], [i],
+                                             assume_unique=True)
+                                for i, x in enumerate(D)]
     else:
         neighbors_model = NearestNeighbors(radius=eps, algorithm=algorithm,
                                            leaf_size=leaf_size,
                                            metric=metric, p=p)
         neighbors_model.fit(X)
         # This has worst case O(n^2) memory complexity
-        neighborhoods = neighbors_model.radius_neighbors(X, eps,
-                                                         return_distance=False)
+        neighborhoods = neighbors_model.radius_neighbors(return_distance=False)
 
+    # n_neighbors includes the weight of a sample and its eps-neighbors
     if sample_weight is None:
-        n_neighbors = np.array([len(neighbors) for neighbors in neighborhoods])
-    else:
-        n_neighbors = np.array([np.sum(sample_weight[neighbors])
+        n_neighbors = np.array([len(neighbors) + 1
                                 for neighbors in neighborhoods])
+    else:
+        n_neighbors = (sample_weight +
+                       np.array([np.sum(sample_weight[neighbors])
+                                 for neighbors in neighborhoods]))
 
     # Initially, all samples are noise.
     labels = -np.ones(X.shape[0], dtype=np.intp)
@@ -166,7 +177,8 @@ class DBSCAN(BaseEstimator, ClusterMixin):
         the options allowed by metrics.pairwise.calculate_distance for its
         metric parameter.
         If metric is "precomputed", X is assumed to be a distance matrix and
-        must be square.
+        must be square. X may be a sparse matrix (CSR preferred) in which case
+        only "nonzero" elements may be considered neighbors for DBSCAN.
     algorithm : {'auto', 'ball_tree', 'kd_tree', 'brute'}, optional
         The algorithm to be used by the NearestNeighbors module
         to compute pointwise distances and find nearest neighbors.
