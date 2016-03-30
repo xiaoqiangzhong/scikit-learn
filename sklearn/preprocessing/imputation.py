@@ -107,6 +107,8 @@ class Imputer(BaseEstimator, TransformerMixin):
     statistics_ : array of shape (n_features,)
         The imputation fill value for each feature if axis == 0.
 
+    imputed_features : array of shape (n_features_with_missing, )
+        The input features which
     Notes
     -----
     - When ``axis=0``, columns which only contained missing values at `fit`
@@ -123,7 +125,7 @@ class Imputer(BaseEstimator, TransformerMixin):
         self.verbose = verbose
         self.copy = copy
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, return_imputed=False):
         """Fit the imputer on X.
 
         Parameters
@@ -137,6 +139,7 @@ class Imputer(BaseEstimator, TransformerMixin):
         self : object
             Returns self.
         """
+        self.return_imputed = return_imputed
         # Check parameters
         allowed_strategies = ["mean", "median", "most_frequent"]
         if self.strategy not in allowed_strategies:
@@ -372,4 +375,13 @@ class Imputer(BaseEstimator, TransformerMixin):
 
             X[coordinates] = values
 
+            features_with_missing_values = np.where(np.any(mask, axis=0))[0]
+            imputed_mask = mask[:, features_with_missing_values]
+
+            if self.axis == 0:
+                self.imputed_features = valid_statistics_indexes[features_with_missing_values]
+            else:
+                self.imputed_features = features_with_missing_values
+            if self.return_imputed:
+                X = np.hstack((X,imputed_mask))
         return X

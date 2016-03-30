@@ -358,3 +358,35 @@ def test_imputation_copy():
 
     # Note: If X is sparse and if missing_values=0, then a (dense) copy of X is
     # made, even if copy=False.
+
+
+def test_imputed_features():
+    X = np.arange(20,dtype=float).reshape(5,4)
+    n_samples, n_features = X.shape
+    X[0][0] = np.nan
+    X[1][3] = np.nan
+    X[3][2] = np.nan
+    X[:, 1] = np.nan
+
+    imputer = Imputer(missing_values=np.nan, strategy='mean',axis=0)
+    Xt = imputer.fit_transform(X, return_imputed=True)
+    n_features_new = 3
+    n_imputed_features = len(imputer.imputed_features)
+    assert_array_equal(imputer.imputed_features, np.array([0, 2, 3]))
+    assert_equal(Xt.shape, (n_samples, n_features_new + n_imputed_features))
+
+    X[:, 1] = 1
+    imputer = Imputer(missing_values=np.nan, strategy='mean',axis=1)
+    Xt = imputer.fit_transform(X, return_imputed=True)
+    n_features_new = n_features
+    n_imputed_features = len(imputer.imputed_features)
+    assert_array_equal(imputer.imputed_features, np.array([0, 2, 3]))
+    assert_equal(Xt.shape, (n_samples, n_features_new + n_imputed_features))
+
+    X[:, 2] = 1
+    imputer = Imputer(missing_values=np.nan, strategy='mean',axis=0)
+    Xt = imputer.fit_transform(X, return_imputed=True)
+    n_features_new = 4
+    n_imputed_features = len(imputer.imputed_features)
+    assert_array_equal(imputer.imputed_features, np.array([0, 3]))
+    assert_equal(Xt.shape, (n_samples, n_features_new + n_imputed_features))
