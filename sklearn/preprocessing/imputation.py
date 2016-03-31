@@ -102,13 +102,25 @@ class Imputer(BaseEstimator, TransformerMixin):
         - If `axis=0` and X is encoded as a CSR matrix;
         - If `axis=1` and X is encoded as a CSC matrix.
 
+    add_missing_indicator : boolean, optional (default=False)
+        If True, the returned X will have an appended indicator matrix
+        to denote the features that have at least one missing value and
+        the indicator matrix has 1 for each missing value.
+        The shape of X will now be
+        ``(n_samples, n_features + n_features_with_missing)`` if axis=1
+        ``(n_samples, n_features_new _ n_features with_partial_missing``
+        if axis=0
+
     Attributes
     ----------
     statistics_ : array of shape (n_features,)
         The imputation fill value for each feature if axis == 0.
 
-    imputed_features : array of shape (n_features_with_missing, )
-        The input features which
+    imputed_features_ : array of shape (n_features_with_missing, )
+        The input features which have been imputed during transform
+        The size of this attribute will be the number of features with
+        at least one missing value.
+
     Notes
     -----
     - When ``axis=0``, columns which only contained missing values at `fit`
@@ -118,14 +130,15 @@ class Imputer(BaseEstimator, TransformerMixin):
       contain missing values).
     """
     def __init__(self, missing_values="NaN", strategy="mean",
-                 axis=0, verbose=0, copy=True):
+                 axis=0, verbose=0, copy=True, add_missing_indicator=False):
         self.missing_values = missing_values
         self.strategy = strategy
         self.axis = axis
         self.verbose = verbose
         self.copy = copy
+        self.add_missing_indicator = add_missing_indicator
 
-    def fit(self, X, y=None, return_imputed=False):
+    def fit(self, X, y=None):
         """Fit the imputer on X.
 
         Parameters
@@ -139,7 +152,6 @@ class Imputer(BaseEstimator, TransformerMixin):
         self : object
             Returns self.
         """
-        self.return_imputed = return_imputed
         # Check parameters
         allowed_strategies = ["mean", "median", "most_frequent"]
         if self.strategy not in allowed_strategies:
@@ -379,9 +391,11 @@ class Imputer(BaseEstimator, TransformerMixin):
             imputed_mask = mask[:, features_with_missing_values]
 
             if self.axis == 0:
-                self.imputed_features = valid_statistics_indexes[features_with_missing_values]
+                self.imputed_features_ = valid_statistics_indexes[
+                                        features_with_missing_values]
             else:
-                self.imputed_features = features_with_missing_values
-            if self.return_imputed:
-                X = np.hstack((X,imputed_mask))
+                self.imputed_features_ = features_with_missing_values
+
+            if self.add_missing_indicator:
+                X = np.hstack((X, imputed_mask))
         return X
