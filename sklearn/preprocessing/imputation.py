@@ -350,14 +350,14 @@ class Imputer(BaseEstimator, TransformerMixin):
         invalid_mask = np.isnan(statistics)
         valid_mask = np.logical_not(invalid_mask)
         valid_statistics = statistics[valid_mask]
-        valid_statistics_indexes = np.where(valid_mask)[0]
+        valid_idx = np.where(valid_mask)[0]
         missing = np.arange(X.shape[not self.axis])[invalid_mask]
 
         if self.axis == 0 and invalid_mask.any():
             if self.verbose:
                 warnings.warn("Deleting features without "
                               "observed values: %s" % missing)
-            X = X[:, valid_statistics_indexes]
+            X = X[:, valid_idx]
         elif self.axis == 1 and invalid_mask.any():
             raise ValueError("Some rows only contain "
                              "missing values: %s" % missing)
@@ -389,8 +389,7 @@ class Imputer(BaseEstimator, TransformerMixin):
             imputed_mask = mask[:, features_with_missing_values]
 
             if self.axis == 0:
-                self.imputed_features_ = valid_statistics_indexes[
-                                        features_with_missing_values]
+                self.imputed_features_ = valid_idx[features_with_missing_values]
             else:
                 self.imputed_features_ = features_with_missing_values
 
