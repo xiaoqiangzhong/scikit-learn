@@ -107,9 +107,7 @@ class Imputer(BaseEstimator, TransformerMixin):
         to denote the features that have at least one missing value and
         the indicator matrix has 1 for each missing value.
         The shape of X will now be
-        ``(n_samples, n_features + n_features_with_missing)`` if axis=1
-        ``(n_samples, n_features_new _ n_features with_partial_missing``
-        if axis=0
+        ``(n_samples, n_features_new + len(imputed_features_)``
 
     Attributes
     ----------
@@ -119,7 +117,7 @@ class Imputer(BaseEstimator, TransformerMixin):
     imputed_features_ : array of shape (n_features_with_missing, )
         The input features which have been imputed during transform
         The size of this attribute will be the number of features with
-        at least one missing value.
+        at least one missing value (and fewer than all in the axis=0 case)
 
     Notes
     -----

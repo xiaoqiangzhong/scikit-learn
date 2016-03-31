@@ -360,8 +360,7 @@ def test_imputation_copy():
     # made, even if copy=False.
 
 
-def test_imputed_features():
-
+def test_missing_indicator():
     # one feature with all missng values
     X = np.array([
        [-1,  -1,   2,   3],
@@ -371,21 +370,31 @@ def test_imputed_features():
        [16,  -1,  18,  19]
     ])
     n_samples, n_features = X.shape
-    imputer = Imputer(missing_values=-1, strategy='mean', axis=0,
-                      add_missing_indicator=True)
+    imputer = Imputer(missing_values=-1, strategy='mean', axis=0)
+    imputer_with_in = Imputer(missing_values=-1, strategy='mean', axis=0,
+                              add_missing_indicator=True)
     Xt = imputer.fit_transform(X)
-    n_features_new = 3
-    n_imputed_features = len(imputer.imputed_features_)
-    assert_array_equal(imputer.imputed_features_, np.array([0, 2, 3]))
-    assert_equal(Xt.shape, (n_samples, n_features_new + n_imputed_features))
+    Xt_with_in = imputer_with_in.fit_transform(X)
+    imputed_features_mask = X[:, imputer_with_in.imputed_features_] == -1
+    assert_array_equal(Xt_with_in, np.hstack((Xt, imputed_features_mask)))
+    n_features_new = Xt.shape[1]
+    n_imputed_features = len(imputer_with_in.imputed_features_)
+    assert_array_equal(imputer_with_in.imputed_features_, np.array([0, 2, 3]))
+    assert_equal(Xt_with_in.shape,
+                 (n_samples, n_features_new + n_imputed_features))
 
-    imputer = Imputer(missing_values=-1, strategy='mean', axis=1,
-                      add_missing_indicator=True)
+    imputer = Imputer(missing_values=-1, strategy='mean', axis=1)
+    imputer_with_in = Imputer(missing_values=-1, strategy='mean', axis=1,
+                              add_missing_indicator=True)
     Xt = imputer.fit_transform(X)
-    n_features_new = n_features
-    n_imputed_features = len(imputer.imputed_features_)
+    Xt_with_in = imputer_with_in.fit_transform(X)
+    imputed_features_mask = X[:, imputer_with_in.imputed_features_] == -1
+    assert_array_equal(Xt_with_in, np.hstack((Xt, imputed_features_mask)))
+    n_features_new = Xt.shape[1]
+    n_imputed_features = len(imputer_with_in.imputed_features_)
     assert_array_equal(imputer.imputed_features_, np.array([0, 1, 2, 3]))
-    assert_equal(Xt.shape, (n_samples, n_features_new + n_imputed_features))
+    assert_equal(Xt_with_in.shape,
+                 (n_samples, n_features_new + n_imputed_features))
 
     # one feature with all missing values and one with no missing value
     # when axis=0 the feature gets discarded
@@ -396,18 +405,28 @@ def test_imputed_features():
        [12,  -1,   1,  15],
        [16,  -1,   1,  19]
     ])
-    imputer = Imputer(missing_values=-1, strategy='mean', axis=0,
-                      add_missing_indicator=True)
+    imputer = Imputer(missing_values=-1, strategy='mean', axis=0)
+    imputer_with_in = Imputer(missing_values=-1, strategy='mean', axis=0,
+                              add_missing_indicator=True)
     Xt = imputer.fit_transform(X)
-    n_features_new = 3
-    n_imputed_features = len(imputer.imputed_features_)
+    Xt_with_in = imputer_with_in.fit_transform(X)
+    imputed_features_mask = X[:, imputer_with_in.imputed_features_] == -1
+    assert_array_equal(Xt_with_in, np.hstack((Xt, imputed_features_mask)))
+    n_features_new = Xt.shape[1]
+    n_imputed_features = len(imputer_with_in.imputed_features_)
     assert_array_equal(imputer.imputed_features_, np.array([0, 3]))
-    assert_equal(Xt.shape, (n_samples, n_features_new + n_imputed_features))
+    assert_equal(Xt_with_in.shape,
+                 (n_samples, n_features_new + n_imputed_features))
 
-    imputer = Imputer(missing_values=-1, strategy='mean', axis=1,
-                      add_missing_indicator=True)
+    imputer = Imputer(missing_values=-1, strategy='mean', axis=1)
+    imputer_with_in = Imputer(missing_values=-1, strategy='mean', axis=1,
+                              add_missing_indicator=True)
     Xt = imputer.fit_transform(X)
-    n_features_new = 4
-    n_imputed_features = len(imputer.imputed_features_)
+    Xt_with_in = imputer_with_in.fit_transform(X)
+    imputed_features_mask = X[:, imputer_with_in.imputed_features_] == -1
+    assert_array_equal(Xt_with_in, np.hstack((Xt, imputed_features_mask)))
+    n_features_new = Xt.shape[1]
+    n_imputed_features = len(imputer_with_in.imputed_features_)
     assert_array_equal(imputer.imputed_features_, np.array([0, 1, 3]))
-    assert_equal(Xt.shape, (n_samples, n_features_new + n_imputed_features))
+    assert_equal(Xt_with_in.shape,
+                 (n_samples, n_features_new + n_imputed_features))
