@@ -392,7 +392,7 @@ def test_missing_indicator():
     assert_array_equal(Xt_with_in, np.hstack((Xt, imputed_features_mask)))
     n_features_new = Xt.shape[1]
     n_imputed_features = len(imputer_with_in.imputed_features_)
-    assert_array_equal(imputer.imputed_features_, np.array([0, 1, 2, 3]))
+    assert_array_equal(imputer_with_in.imputed_features_, np.array([0, 1, 2, 3]))
     assert_equal(Xt_with_in.shape,
                  (n_samples, n_features_new + n_imputed_features))
 
@@ -414,7 +414,7 @@ def test_missing_indicator():
     assert_array_equal(Xt_with_in, np.hstack((Xt, imputed_features_mask)))
     n_features_new = Xt.shape[1]
     n_imputed_features = len(imputer_with_in.imputed_features_)
-    assert_array_equal(imputer.imputed_features_, np.array([0, 3]))
+    assert_array_equal(imputer_with_in.imputed_features_, np.array([0, 3]))
     assert_equal(Xt_with_in.shape,
                  (n_samples, n_features_new + n_imputed_features))
 
@@ -427,6 +427,6 @@ def test_missing_indicator():
     assert_array_equal(Xt_with_in, np.hstack((Xt, imputed_features_mask)))
     n_features_new = Xt.shape[1]
     n_imputed_features = len(imputer_with_in.imputed_features_)
-    assert_array_equal(imputer.imputed_features_, np.array([0, 1, 3]))
+    assert_array_equal(imputer_with_in.imputed_features_, np.array([0, 1, 3]))
     assert_equal(Xt_with_in.shape,
                  (n_samples, n_features_new + n_imputed_features))

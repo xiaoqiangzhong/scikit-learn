@@ -103,11 +103,9 @@ class Imputer(BaseEstimator, TransformerMixin):
         - If `axis=1` and X is encoded as a CSC matrix.
 
     add_missing_indicator : boolean, optional (default=False)
-        If True, the returned X will have an appended indicator matrix
+        If True, the transformed X will have an appended indicator matrix
         to denote the features that have at least one missing value and
         the indicator matrix has 1 for each missing value.
-        The shape of X will now be
-        ``(n_samples, n_features_new + len(imputed_features_)``
 
     Attributes
     ----------
@@ -118,6 +116,7 @@ class Imputer(BaseEstimator, TransformerMixin):
         The input features which have been imputed during transform
         The size of this attribute will be the number of features with
         at least one missing value (and fewer than all in the axis=0 case)
+        It is accessible only when ``add_missing_indicator`` is True
 
     Notes
     -----
@@ -317,8 +316,17 @@ class Imputer(BaseEstimator, TransformerMixin):
 
         Parameters
         ----------
-        X : {array-like, sparse matrix}, shape = [n_samples, n_features]
+        X : {array-like, sparse matrix}, shape = (n_samples, n_features)
             The input data to complete.
+
+        Return
+        ------
+        X_new : {array-like, sparse matrix},
+                Transformed array.
+                shape = (n_samples, n_features_new) when
+                ``add_missing_indicator`` is False,
+                shape is = (n_samples, n_features_new + len(imputed_features_)
+                when ``add_missing_indicator`` is True.
         """
         if self.axis == 0:
             check_is_fitted(self, 'statistics_')
@@ -385,14 +393,13 @@ class Imputer(BaseEstimator, TransformerMixin):
 
             X[coordinates] = values
 
-            features_with_missing_values = np.where(np.any(mask, axis=0))[0]
-            imputed_mask = mask[:, features_with_missing_values]
-
-            if self.axis == 0:
-                self.imputed_features_ = valid_idx[features_with_missing_values]
-            else:
-                self.imputed_features_ = features_with_missing_values
-
             if self.add_missing_indicator:
+                features_with_missing_values = np.where(np.any(mask, axis=0))[0]
+                imputed_mask = mask[:, features_with_missing_values]
                 X = np.hstack((X, imputed_mask))
+                if self.axis == 0:
+                    self.imputed_features_ = valid_idx[features_with_missing_values]
+                else:
+                    self.imputed_features_ = features_with_missing_values
+
         return X

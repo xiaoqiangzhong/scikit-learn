@@ -445,9 +445,16 @@ values, either using the mean, the median or the most frequent value of
 the row or column in which the missing values are located. This class
 also allows for different missing values encodings.
 
+There is an option ``add_missing_indicator`` which appends the indicator
+matrix to the transformed X. The attribute ``imputed_features_`` which gives
+the input features which have been imputed during transform
+
 The following snippet demonstrates how to replace missing values,
 encoded as ``np.nan``, using the mean value of the columns (axis 0)
-that contain the missing values::
+that contain the missing values. In case there is a feature which has
+all missing features, it is discarded when transform. Also if the
+indicator matrix is shown, then shape of the transformed input is
+(n_samples, n_features_new + len(imputed_features_) ::
 
     >>> import numpy as np
     >>> from sklearn.preprocessing import Imputer
@@ -460,6 +467,65 @@ that contain the missing values::
     [[ 4.          2.        ]
      [ 6.          3.666...]
      [ 7.          6.        ]]
+    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=0,add_missing_indicator=True)
+    >>> imp_with_in.fit([[1, 2], [np.nan, 3], [7, 6]])
+    Imputer(add_missing_indicator=True, axis=0, copy=True, missing_values='NaN',
+        strategy='mean', verbose=0)
+    >>> print(imp_with_in.transform(X))                           # doctest: +ELLIPSIS
+    [[ 4.          2.          1.          0.        ]
+     [ 6.          3.66666667  0.          1.        ]
+     [ 7.          6.          0.          0.        ]]
+    >>>print(imp_with_in.imputed_features_)
+    [0 1]
+
+The following case is when a feature has all missing values and the feature gets
+discarded upon transform and won't be shown in ``imputed_features_``::
+
+    >>>import numpy as np
+    >>> from sklearn.preprocessing import Imputer
+    >>> imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+    >>> imp.fit([[np.nan, 2], [np.nan, 3], [np.nan, 6]])
+    Imputer(add_missing_indicator=False, axis=0, copy=True, missing_values='NaN',
+        strategy='mean', verbose=0)
+    >>> X = [[np.nan, 2], [6, np.nan], [7, 6]]
+    >>> print(imp.transform(X))                           # doctest: +ELLIPSIS
+    [[ 2.        ]
+     [ 3.66666667]
+     [ 6.        ]]
+    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=0,add_missing_indicator=True)
+    >>> imp_with_in.fit([[1, 2], [np.nan, 3], [7, 6]])
+    Imputer(add_missing_indicator=True, axis=0, copy=True, missing_values='NaN',
+        strategy='mean', verbose=0)
+    >>> print(imp_with_in.transform(X))                           # doctest: +ELLIPSIS
+    [[ 2.          0.        ]
+     [ 3.66666667  1.        ]
+     [ 6.          0.        ]]
+    >>>print(imp_with_in.imputed_features_)
+    [1]
+
+In case the imputed value is to be calculated using the rows (axis 1) then
+transform can be directly called since the value is calculated across sample.
+Also if the indicator matrix is shown, then shape of the transformed input is
+(n_samples, n_features + len(imputed_features_) ::
+
+    >>> import numpy as np
+    >>> from sklearn.preprocessing import Imputer
+    >>> imp = Imputer(missing_values='NaN', strategy='mean', axis=1)
+    >>> X = [[np.nan, 2, 4], [6, np.nan, 5], [7, 6, np.nan]]
+    >>> print(imp.transform(X))                           # doctest: +ELLIPSIS
+    [[ 3.   2.   4. ]
+     [ 6.   5.5  5. ]
+     [ 7.   6.   6.5]]
+    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=1,add_missing_indicator=True)
+    >>> print(imp_with_in.transform(X))                           # doctest: +ELLIPSIS
+    [[ 3.   2.   4.   1.   0.   0. ]
+     [ 6.   5.5  5.   0.   1.   0. ]
+     [ 7.   6.   6.5  0.   0.   1. ]]
+    >>>print(imp_with_in.imputed_features_)
+    [0 1 2]
+
+Note that in this case if there is a sample with all missing values there will
+be a ValueError raised since the some rows contain missing values.
 
 The :class:`Imputer` class also supports sparse matrices::
 
