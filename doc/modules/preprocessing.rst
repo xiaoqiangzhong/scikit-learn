@@ -475,7 +475,7 @@ indicator matrix is shown, then shape of the transformed input is
     [[ 4.          2.          1.          0.        ]
      [ 6.          3.66666667  0.          1.        ]
      [ 7.          6.          0.          0.        ]]
-    >>>print(imp_with_in.imputed_features_)
+    >>> print(imp_with_in.imputed_features_)
     [0 1]
 
 The following case is when a feature has all missing values and the feature gets
@@ -484,7 +484,7 @@ discarded upon transform and won't be shown in ``imputed_features_``::
     >>>import numpy as np
     >>> from sklearn.preprocessing import Imputer
     >>> imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
-    >>> imp.fit([[np.nan, 2], [np.nan, 3], [np.nan, 6]])
+    >>> imp.fit([[np.nan, 2], [np.nan, 3], [np.nan, 6]]) # doctest: +NORMALIZE_WHITESPACE
     Imputer(add_missing_indicator=False, axis=0, copy=True, missing_values='NaN',
         strategy='mean', verbose=0)
     >>> X = [[np.nan, 2], [6, np.nan], [7, 6]]
@@ -492,7 +492,7 @@ discarded upon transform and won't be shown in ``imputed_features_``::
     [[ 2.        ]
      [ 3.66666667]
      [ 6.        ]]
-    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=0,add_missing_indicator=True)
+    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=0, add_missing_indicator=True)
     >>> imp_with_in.fit([[1, 2], [np.nan, 3], [7, 6]])
     Imputer(add_missing_indicator=True, axis=0, copy=True, missing_values='NaN',
         strategy='mean', verbose=0)
@@ -500,7 +500,7 @@ discarded upon transform and won't be shown in ``imputed_features_``::
     [[ 2.          0.        ]
      [ 3.66666667  1.        ]
      [ 6.          0.        ]]
-    >>>print(imp_with_in.imputed_features_)
+    >>> print(imp_with_in.imputed_features_)
     [1]
 
 In case the imputed value is to be calculated using the rows (axis 1) then
@@ -516,12 +516,12 @@ Also if the indicator matrix is shown, then shape of the transformed input is
     [[ 3.   2.   4. ]
      [ 6.   5.5  5. ]
      [ 7.   6.   6.5]]
-    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=1,add_missing_indicator=True)
+    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=1, add_missing_indicator=True)
     >>> print(imp_with_in.transform(X))                           # doctest: +ELLIPSIS
     [[ 3.   2.   4.   1.   0.   0. ]
      [ 6.   5.5  5.   0.   1.   0. ]
      [ 7.   6.   6.5  0.   0.   1. ]]
-    >>>print(imp_with_in.imputed_features_)
+    >>> print(imp_with_in.imputed_features_)
     [0 1 2]
 
 Note that in this case if there is a sample with all missing values there will
@@ -532,7 +532,7 @@ The :class:`Imputer` class also supports sparse matrices::
     >>> import scipy.sparse as sp
     >>> X = sp.csc_matrix([[1, 2], [0, 3], [7, 6]])
     >>> imp = Imputer(missing_values=0, strategy='mean', axis=0)
-    >>> imp.fit(X)
+    >>> imp.fit(X) # doctest: +NORMALIZE_WHITESPACE
     Imputer(add_missing_indicator=False, axis=0, copy=True, missing_values=0,
         strategy='mean', verbose=0)
     >>> X_test = sp.csc_matrix([[0, 2], [6, 0], [7, 6]])

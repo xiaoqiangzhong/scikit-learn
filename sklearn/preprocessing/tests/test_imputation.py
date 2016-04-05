@@ -360,7 +360,7 @@ def test_imputation_copy():
     # made, even if copy=False.
 
 
-def test_missing_indicator():
+def test_missing_indicator_dense():
     # one feature with all missng values
     X = np.array([
        [-1,  -1,   2,   3],
@@ -430,3 +430,29 @@ def test_missing_indicator():
     assert_array_equal(imputer_with_in.imputed_features_, np.array([0, 1, 3]))
     assert_equal(Xt_with_in.shape,
                  (n_samples, n_features_new + n_imputed_features))
+
+def test_missing_indicator_sparse():
+    # one feature with all missng values
+    X = sparse.csc_matrix([
+       [-1,  -1,   2,   3],
+       [4,  -1,   6,  -1],
+       [8,  -1,  10,  11],
+       [12,  -1,  -1,  15],
+       [16,  -1,  18,  19]
+    ])
+    n_samples, n_features = X.shape
+    imputer = Imputer(missing_values=-1, strategy='mean', axis=0)
+    imputer_with_in = Imputer(missing_values=-1, strategy='mean', axis=0,
+                              add_missing_indicator=True)
+    Xt = imputer.fit_transform(X)
+    Xt_with_in = imputer_with_in.fit_transform(X)
+    n_features_new = Xt.shape[1]
+    n_imputed_features = len(imputer_with_in.imputed_features_)
+    assert_array_equal(imputer_with_in.imputed_features_, np.array([0, 2, 3]))
+    assert_equal(Xt_with_in.shape,
+                 (n_samples, n_features_new + n_imputed_features))
+    X = X[:, imputer_with_in.imputed_features_]
+    mask = X.data == -1
+    mask_matrix = X.__class__((mask, Xt.indices.copy(), Xt.indptr.copy()), shape=Xt.shape, dtype=Xt.dtype)
+    mask_matrix.eliminate_zeros()
+    assert_array_equal(Xt_with_in.toarray(), sparse.hstack((Xt, mask_matrix)).toarray())

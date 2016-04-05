@@ -378,6 +378,17 @@ class Imputer(BaseEstimator, TransformerMixin):
 
             X.data[mask] = astype(valid_statistics[indexes], X.dtype,
                                   copy=False)
+
+            if self.add_missing_indicator:
+                mask_matrix = X.__class__((mask, X.indices.copy(), X.indptr.copy()), shape=X.shape, dtype=X.dtype)
+                mask_matrix.eliminate_zeros()  # removes explicit False entries to make the matrix sparser
+                features_with_missing_values = mask_matrix.max(axis=0).nonzero()[1]
+                X = sparse.hstack((X, mask_matrix))
+                if self.axis == 0:
+                    self.imputed_features_ = valid_idx[features_with_missing_values]
+                else:
+                    self.imputed_features_ = features_with_missing_values
+
         else:
             if sparse.issparse(X):
                 X = X.toarray()
