@@ -11,6 +11,7 @@ from scipy import stats
 from ..base import BaseEstimator, TransformerMixin
 from ..utils import check_array
 from ..utils.fixes import astype
+from ..utils.fixes import sparse_min_max
 from ..utils.sparsefuncs import _get_median
 from ..utils.validation import check_is_fitted
 from ..utils.validation import FLOAT_DTYPES
@@ -382,7 +383,7 @@ class Imputer(BaseEstimator, TransformerMixin):
             if self.add_missing_indicator:
                 mask_matrix = X.__class__((mask, X.indices.copy(), X.indptr.copy()), shape=X.shape, dtype=X.dtype)
                 mask_matrix.eliminate_zeros()  # removes explicit False entries to make the matrix sparser
-                features_with_missing_values = mask_matrix.max(axis=0).nonzero()[1]
+                features_with_missing_values = np.where(np.logical_not(sparse_min_max(mask_matrix, 0)[1]))
                 X = sparse.hstack((X, mask_matrix))
                 if self.axis == 0:
                     self.imputed_features_ = valid_idx[features_with_missing_values]

@@ -459,7 +459,7 @@ indicator matrix is shown, then shape of the transformed input is
     >>> import numpy as np
     >>> from sklearn.preprocessing import Imputer
     >>> imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
-    >>> imp.fit([[1, 2], [np.nan, 3], [7, 6]])
+    >>> imp.fit([[1, 2], [np.nan, 3], [7, 6]])  # doctest: +NORMALIZE_WHITESPACE
     Imputer(add_missing_indicator=False, axis=0, copy=True, missing_values='NaN',
         strategy='mean', verbose=0)
     >>> X = [[np.nan, 2], [6, np.nan], [7, 6]]
@@ -481,7 +481,7 @@ indicator matrix is shown, then shape of the transformed input is
 The following case is when a feature has all missing values and the feature gets
 discarded upon transform and won't be shown in ``imputed_features_``::
 
-    >>>import numpy as np
+    >>> import numpy as np
     >>> from sklearn.preprocessing import Imputer
     >>> imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
     >>> imp.fit([[np.nan, 2], [np.nan, 3], [np.nan, 6]]) # doctest: +NORMALIZE_WHITESPACE
