@@ -75,10 +75,14 @@ DEPRECATED_TRANSFORM = [
     "GradientBoostingClassifier", "GradientBoostingRegressor"]
 
 
-def _set_test_name(function, name):
-    function.description = ("sklearn.tests.test_common.{0}({1})".format(
-        function.__name__, name))
-    return function
+class _set_test_name(object):
+    def __init__(self, function, name):
+        self.function = function
+        self.description = ("sklearn.tests.test_common.{0}({1})".format(
+            function.__name__, name))
+
+    def __call__(self, *args, **kwargs):
+        return self.function(*args, **kwargs)
 
 
 def _yield_non_meta_checks(name, Estimator):
@@ -1206,10 +1210,8 @@ def check_regressors_train(name, Regressor):
     # TODO: find out why PLS, CCA and TheilSen fail. RANSAC is random
     # and furthermore assumes the presence of outliers, hence
     # skipped
-    if name not in ('PLSCanonical', 'CCA', 'TheilSenRegressor',
+    if name not in ('PLSCanonical', 'CCA',
                     'RANSACRegressor'):
-        import sys
-        print('check_regressors_train', repr(name), file=sys.stderr)
         assert_greater(regressor.score(X, y_), 0.5)
 
 
