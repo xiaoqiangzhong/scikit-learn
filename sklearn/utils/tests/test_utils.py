@@ -8,7 +8,7 @@ from itertools import chain
 from sklearn.utils.testing import (assert_equal, assert_raises, assert_true,
                                    assert_almost_equal, assert_array_equal,
                                    SkipTest, assert_raises_regex,
-                                   assert_greater_equal)
+                                   assert_greater_equal, assert_not_equal)
 
 from sklearn.utils import check_random_state
 from sklearn.utils import deprecated
@@ -300,6 +300,8 @@ def test_randomize_estimator():
     randomize_estimator(est1, 3)
     assert_true(isinstance(est1.steps[0][1].estimator.random_state, int))
     assert_true(isinstance(est1.steps[1][1].random_state, int))
+    assert_not_equal(est1.get_params()['sel__estimator__random_state'],
+                     est1.get_params()['clf__random_state'])
 
     # ensure multiple random_state paramaters are invariant to get_params()
     # iteration order
@@ -314,15 +316,10 @@ def test_randomize_estimator():
             params = Pipeline.get_params(self, *args, **kwargs).items()
             return OrderedDict(sorted(params, reverse=True))
 
-    est2 = AlphaParamPipeline(make_steps())
-    randomize_estimator(est2, 3)
-    est3 = RevParamPipeline(make_steps())
-    randomize_estimator(est3, 3)
-    assert_equal(est1.get_params()['sel__estimator__random_state'],
-                 est2.get_params()['sel__estimator__random_state'])
-    assert_equal(est1.get_params()['clf__random_state'],
-                 est2.get_params()['clf__random_state'])
-    assert_equal(est1.get_params()['sel__estimator__random_state'],
-                 est3.get_params()['sel__estimator__random_state'])
-    assert_equal(est1.get_params()['clf__random_state'],
-                 est3.get_params()['clf__random_state'])
+    for cls in [AlphaParamPipeline, RevParamPipeline]:
+        est2 = cls(make_steps())
+        randomize_estimator(est2, 3)
+        assert_equal(est1.get_params()['sel__estimator__random_state'],
+                     est2.get_params()['sel__estimator__random_state'])
+        assert_equal(est1.get_params()['clf__random_state'],
+                     est2.get_params()['clf__random_state'])
