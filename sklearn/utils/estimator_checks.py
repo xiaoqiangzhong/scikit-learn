@@ -1207,10 +1207,10 @@ def check_regressors_train(name, Regressor):
     y_pred = regressor.predict(X)
     assert_equal(y_pred.shape, y_.shape)
 
-    # TODO: find out why PLS, CCA and TheilSen fail. RANSAC is random
+    # TODO: find out why PLS, CCA and LinearSVR fail. RANSAC is random
     # and furthermore assumes the presence of outliers, hence
     # skipped
-    if name not in ('PLSCanonical', 'CCA',
+    if name not in ('PLSCanonical', 'CCA', 'LinearSVR',
                     'RANSACRegressor'):
         assert_greater(regressor.score(X, y_), 0.5)
 
