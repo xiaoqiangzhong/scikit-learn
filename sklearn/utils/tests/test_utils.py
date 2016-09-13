@@ -18,10 +18,16 @@ from sklearn.utils import column_or_1d
 from sklearn.utils import safe_indexing
 from sklearn.utils import shuffle
 from sklearn.utils import gen_even_slices
+from sklearn.utils import randomize_estimator
 from sklearn.utils.extmath import pinvh
 from sklearn.utils.arpack import eigsh
 from sklearn.utils.mocking import MockDataFrame
 from sklearn.utils.graph import graph_laplacian
+from sklearn.externals.odict import OrderedDict
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.pipeline import Pipeline
+from sklearn.feature_selection import SelectFromModel
 
 
 def test_make_rng():
@@ -265,3 +271,58 @@ def test_gen_even_slices():
     slices = gen_even_slices(10, -1)
     assert_raises_regex(ValueError, "gen_even_slices got n_packs=-1, must be"
                         " >=1", next, slices)
+
+
+def test_randomize_estimator():
+    # Linear Discriminant Analysis doesn't have random state: smoke test
+    randomize_estimator(LinearDiscriminantAnalysis(), random_state=17)
+
+    tree1 = DecisionTreeClassifier()
+    assert_equal(tree1.random_state, None)
+    # check random_state is None still sets
+    randomize_estimator(tree1, None)
+    assert_true(isinstance(tree1.random_state, int))
+
+    # check random_state fixes results in consistent initialisation
+    randomize_estimator(tree1, 3)
+    assert_true(isinstance(tree1.random_state, int))
+    tree2 = DecisionTreeClassifier()
+    randomize_estimator(tree2, 3)
+    assert_equal(tree1.random_state, tree2.random_state)
+
+    # nested random_state
+
+    def make_steps():
+        return [('sel', SelectFromModel(DecisionTreeClassifier())),
+                ('clf', DecisionTreeClassifier())]
+
+    est1 = Pipeline(make_steps())
+    randomize_estimator(est1, 3)
+    assert_true(isinstance(est1.steps[0][1].estimator.random_state, int))
+    assert_true(isinstance(est1.steps[1][1].random_state, int))
+
+    # ensure multiple random_state paramaters are invariant to get_params()
+    # iteration order
+
+    class AlphaParamPipeline(Pipeline):
+        def get_params(self, *args, **kwargs):
+            params = Pipeline.get_params(self, *args, **kwargs).items()
+            return OrderedDict(sorted(params))
+
+    class RevParamPipeline(Pipeline):
+        def get_params(self, *args, **kwargs):
+            params = Pipeline.get_params(self, *args, **kwargs).items()
+            return OrderedDict(sorted(params, reverse=True))
+
+    est2 = AlphaParamPipeline(make_steps())
+    randomize_estimator(est2, 3)
+    est3 = RevParamPipeline(make_steps())
+    randomize_estimator(est3, 3)
+    assert_equal(est1.get_params()['sel__estimator__random_state'],
+                 est2.get_params()['sel__estimator__random_state'])
+    assert_equal(est1.get_params()['clf__random_state'],
+                 est2.get_params()['clf__random_state'])
+    assert_equal(est1.get_params()['sel__estimator__random_state'],
+                 est3.get_params()['sel__estimator__random_state'])
+    assert_equal(est1.get_params()['clf__random_state'],
+                 est3.get_params()['clf__random_state'])

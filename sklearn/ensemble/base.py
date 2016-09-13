@@ -10,7 +10,7 @@ import numpy as np
 from ..base import clone
 from ..base import BaseEstimator
 from ..base import MetaEstimatorMixin
-from ..utils import _get_n_jobs
+from ..utils import _get_n_jobs, randomize_estimator
 
 
 class BaseEnsemble(BaseEstimator, MetaEstimatorMixin):
@@ -67,7 +67,7 @@ class BaseEnsemble(BaseEstimator, MetaEstimatorMixin):
         if self.base_estimator_ is None:
             raise ValueError("base_estimator cannot be None")
 
-    def _make_estimator(self, append=True):
+    def _make_estimator(self, append=True, random_state=None):
         """Make and configure a copy of the `base_estimator_` attribute.
 
         Warning: This method should be used to properly instantiate new
@@ -76,6 +76,9 @@ class BaseEnsemble(BaseEstimator, MetaEstimatorMixin):
         estimator = clone(self.base_estimator_)
         estimator.set_params(**dict((p, getattr(self, p))
                                     for p in self.estimator_params))
+
+        if random_state is not None:
+            randomize_estimator(estimator, random_state)
 
         if append:
             self.estimators_.append(estimator)

@@ -12,6 +12,7 @@ from sklearn.utils.testing import (
     assert_warns,
     assert_no_warnings,
     assert_equal,
+    assert_true,
     set_random_state,
     assert_raise_message,
     ignore_warnings)
@@ -66,7 +67,10 @@ def test_set_random_state():
     # Linear Discriminant Analysis doesn't have random state: smoke test
     set_random_state(lda, 3)
     set_random_state(tree, 3)
-    assert_equal(tree.random_state, 3)
+    assert_true(isinstance(tree.random_state, int))
+    tree2 = DecisionTreeClassifier()
+    set_random_state(tree2, 3)
+    assert_equal(tree.random_state, tree2.random_state)
 
 
 def test_assert_raise_message():

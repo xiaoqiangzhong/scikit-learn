@@ -5,10 +5,12 @@ Testing for the base module (sklearn.ensemble.base).
 # Authors: Gilles Louppe
 # License: BSD 3 clause
 
+import numpy as np
 from numpy.testing import assert_equal
 from nose.tools import assert_true
 
 from sklearn.utils.testing import assert_raise_message
+from sklearn.utils.testing import assert_not_equal
 from sklearn.datasets import load_iris
 from sklearn.ensemble import BaggingClassifier
 from sklearn.linear_model import Perceptron
@@ -16,21 +18,26 @@ from sklearn.linear_model import Perceptron
 
 def test_base():
     # Check BaseEnsemble methods.
-    ensemble = BaggingClassifier(base_estimator=Perceptron(), n_estimators=3)
+    ensemble = BaggingClassifier(base_estimator=Perceptron(random_state=None),
+                                 n_estimators=3)
 
     iris = load_iris()
     ensemble.fit(iris.data, iris.target)
     ensemble.estimators_ = []  # empty the list and create estimators manually
 
     ensemble._make_estimator()
-    ensemble._make_estimator()
-    ensemble._make_estimator()
+    random_state = np.random.RandomState(3)
+    ensemble._make_estimator(random_state=random_state)
+    ensemble._make_estimator(random_state=random_state)
     ensemble._make_estimator(append=False)
 
     assert_equal(3, len(ensemble))
     assert_equal(3, len(ensemble.estimators_))
 
     assert_true(isinstance(ensemble[0], Perceptron))
+    assert_equal(ensemble[0].random_state, None)
+    assert_true(isinstance(ensemble[1].random_state, int))
+    assert_not_equal(ensemble[1].random_state, ensemble[2].random_state)
 
 
 def test_base_zero_n_estimators():

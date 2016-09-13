@@ -19,6 +19,8 @@ from ..externals.joblib import cpu_count
 from ..exceptions import ConvergenceWarning as _ConvergenceWarning
 from ..exceptions import DataConversionWarning
 
+MAX_RAND_SEED = np.iinfo(np.int32).max
+
 
 @deprecated("ConvergenceWarning has been moved into the sklearn.exceptions "
             "module. It will not be available here from version 0.19")
@@ -443,3 +445,39 @@ def indices_to_mask(indices, mask_length):
     mask[indices] = True
 
     return mask
+
+
+def randomize_estimator(estimator, random_state=None):
+    """Sets fixed random_state parameters for an estimator
+
+    Finds all parameters ending ``random_state`` and sets them to integers
+    derived from ``random_state``.
+
+    Parameters
+    ----------
+
+    estimator : estimator supporting get/set_params
+        Estimator with potential randomness managed by random_state
+        parameters.
+
+    random_state : numpy.RandomState or int, optional
+        Random state used to generate integer values.
+
+    Notes
+    -----
+    This does not necessarily set *all* ``random_state`` attributes that
+    control an estimator's randomness, only those accessible through
+    ``estimator.get_params()``.  ``random_state``s not controlled include
+    those belonging to:
+
+        * cross-validation splitters
+        * ``scipy.stats`` rvs
+    """
+    random_state = check_random_state(random_state)
+    to_set = {}
+    for key in sorted(estimator.get_params(deep=True)):
+        if key == 'random_state' or key.endswith('_random_state'):
+            to_set[key] = random_state.randint(MAX_RAND_SEED)
+
+    if to_set:
+        estimator.set_params(**to_set)

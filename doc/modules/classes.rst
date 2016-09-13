@@ -1347,3 +1347,4 @@ Low-level methods
    utils.estimator_checks.check_estimator
    utils.resample
    utils.shuffle
+   utils.randomize_estimator
