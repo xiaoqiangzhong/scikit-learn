@@ -1208,6 +1208,7 @@ def check_regressors_train(name, Regressor):
     # skipped
     if name not in ('PLSCanonical', 'CCA', 'TheilSenRegressor',
                     'RANSACRegressor'):
+        assert_true(not name.startswith('TheilSen'))
         assert_greater(regressor.score(X, y_), 0.5)
 
 
