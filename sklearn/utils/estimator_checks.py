@@ -1208,7 +1208,8 @@ def check_regressors_train(name, Regressor):
     # skipped
     if name not in ('PLSCanonical', 'CCA', 'TheilSenRegressor',
                     'RANSACRegressor'):
-        print('check_regressors_train', repr(name))
+        import sys
+        print('check_regressors_train', repr(name), file=sys.stderr)
         assert_greater(regressor.score(X, y_), 0.5)
 
 
