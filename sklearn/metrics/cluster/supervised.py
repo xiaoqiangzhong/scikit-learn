@@ -17,7 +17,7 @@ from math import log
 import numpy as np
 from scipy.misc import comb
 from scipy.sparse import coo_matrix
-from scipy import sparse
+from scipy import sparse as sp
 
 from .expected_mutual_info_fast import expected_mutual_information
 from ...utils.fixes import bincount
@@ -230,7 +230,7 @@ def adjusted_rand_score(labels_true, labels_pred, max_n_classes=5000,
         sum_comb_c = sum(comb2(n_c) for n_c in contingency.sum(axis=1))
         sum_comb_k = sum(comb2(n_k) for n_k in contingency.sum(axis=0))
         sum_comb = sum(comb2(n_ij) for n_ij in contingency.flatten())
-    elif sparse.issparse(contingency):
+    elif sp.issparse(contingency):
         # For a sparse matrix
         sum_comb_c = sum(comb2(n_c)
                          for n_c in np.ravel(contingency.sum(axis=1)))
@@ -692,12 +692,12 @@ def mutual_info_score(labels_true, labels_pred, contingency=None,
         mi = (contingency_nm * (log_contingency_nm - log(contingency_sum))
               + contingency_nm * log_outer)
         return mi.sum()
-    elif sparse.issparse(contingency):
+    elif sp.issparse(contingency):
         # For a sparse matrix
         contingency_sum = contingency.sum()
         pi = np.array(contingency.sum(axis=1))
         pj = np.array(contingency.sum(axis=0)).T
-        nzx, nzy, nz_val = sparse.find(contingency)
+        nzx, nzy, nz_val = sp.find(contingency)
         log_contingency_nm = np.log(nz_val)
         contingency_nm = nz_val * 1.0 / contingency_sum
         # Don't need to calculate the full outer product, just for non-zeroes
