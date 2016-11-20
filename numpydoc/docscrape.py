@@ -332,7 +332,7 @@ class NumpyDocString(collections.Mapping):
                 section = ' '.join(section)
                 if self.get(section):
                     msg = ("The section %s appears twice in the docstring." %
-                           section)
+                           section + '\n%s' % self._doc._str)
                     raise ValueError(msg)
 
             if section in ('Parameters', 'Returns', 'Yields', 'Raises',
