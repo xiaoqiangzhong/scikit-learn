@@ -174,7 +174,7 @@ def check_classification_targets(y):
 
 
 def type_of_target(y):
-    """Determine the type of data indicated by target ``y``
+    """Determine the type of data indicated by target y.
 
     Note that this type is the most specific type that can be inferred.
     For example:
