@@ -344,3 +344,7 @@ Changes to estimator checks
 - Add test :func:`estimator_checks.check_methods_subset_invariance` to check
   that estimators methods are invariant if applied to a data subset.
   :issue:`10420` by :user:`Jonathan Ohayon <Johayon>`
+
+- Transformers will now be identified by the presence of a ``transform``
+  method, rather than inheritance from :class:`base.TransformerMixin`.
+  :issue:`10474` by `Joel Nothman`_.
