@@ -383,6 +383,16 @@ METRICS_WITHOUT_SAMPLE_WEIGHT = [
 ]
 
 
+def test_completeness():
+    # check that every metric is in one of the categories
+    assert (set(REGRESSION_METRICS) |
+            set(THRESHOLDED_METRICS) |
+            set(CLASSIFICATION_METRICS) |
+            set(MULTILABELS_METRICS) |
+            set(THRESHOLDED_MULTILABEL_METRICS) |
+            set(MULTIOUTPUT_METRICS)) == set(ALL_METRICS)
+
+
 @ignore_warnings
 def test_symmetry():
     # Test the symmetry of score and loss functions
