@@ -20,6 +20,11 @@ except ImportError:
 "
 python -c "import multiprocessing as mp; print('%d CPUs' % mp.cpu_count())"
 
+if [ -z $TEST_ARGS ]
+then
+	TEST_ARGS=sklearn
+fi
+
 run_tests() {
     TEST_CMD="pytest --showlocals --durations=20 --pyargs"
 
@@ -45,7 +50,7 @@ run_tests() {
 
     set -x  # print executed commands to the terminal
 
-    $TEST_CMD sklearn
+    $TEST_CMD $TEST_ARGS
 }
 
 run_tests
